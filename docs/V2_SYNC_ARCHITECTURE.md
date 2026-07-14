@@ -30,7 +30,7 @@ In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible.
 - `get_app_paths`: returns app data and default notes paths.
 - `ensure_notes_folder`: creates the default notes folder.
 - `syncthing_status`: checks local Syncthing health.
-- `syncthing_start`: starts `syncthing --no-browser` or the path from `SLIGHT_SYNCTHING_BIN`.
+- `syncthing_start`: starts the discovered executable with `--no-browser`; an explicit `SLIGHT_SYNCTHING_BIN` takes priority.
 - `syncthing_stop`: stops only a Syncthing process started by this app session.
 - `syncthing_proxy_request`: proxies safe local REST requests to Syncthing.
 - `syncthing_apply_folder_config`: returns a confirmation summary and a five-minute, single-use token without writing configuration.
@@ -56,6 +56,7 @@ In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible.
 ## Security Rules
 
 - The backend only targets `http://127.0.0.1:8384` in the alpha implementation.
+- External engine discovery checks `SLIGHT_SYNCTHING_BIN`, the process `PATH`, and common native install paths. An invalid explicit path fails without silently choosing another binary.
 - Proxy paths must start with `/` and must not contain `://` or `..`.
 - API keys must not be stored in the notes folder.
 - API keys are validated against header injection and attached only to the current localhost request as `X-API-Key`; the Rust backend does not persist them.

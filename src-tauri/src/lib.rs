@@ -45,6 +45,7 @@ struct SyncthingStatus {
     running: bool,
     managed: bool,
     api_base: String,
+    executable: Option<String>,
     message: String,
 }
 
@@ -205,14 +206,37 @@ fn syncthing_status() -> SyncthingStatus {
             running: true,
             managed: false,
             api_base: DEFAULT_SYNCTHING_URL.to_string(),
+            executable: find_syncthing_executable()
+                .ok()
+                .flatten()
+                .map(|path| path.to_string_lossy().to_string()),
             message,
         },
-        Err(err) => SyncthingStatus {
-            available: false,
-            running: false,
-            managed: false,
-            api_base: DEFAULT_SYNCTHING_URL.to_string(),
-            message: err,
+        Err(health_error) => match find_syncthing_executable() {
+            Ok(Some(path)) => SyncthingStatus {
+                available: true,
+                running: false,
+                managed: false,
+                api_base: DEFAULT_SYNCTHING_URL.to_string(),
+                executable: Some(path.to_string_lossy().to_string()),
+                message: "已检测到 Syncthing，但当前没有运行。".to_string(),
+            },
+            Ok(None) => SyncthingStatus {
+                available: false,
+                running: false,
+                managed: false,
+                api_base: DEFAULT_SYNCTHING_URL.to_string(),
+                executable: None,
+                message: "未找到 Syncthing。请先安装，或设置 SLIGHT_SYNCTHING_BIN。".to_string(),
+            },
+            Err(discovery_error) => SyncthingStatus {
+                available: false,
+                running: false,
+                managed: false,
+                api_base: DEFAULT_SYNCTHING_URL.to_string(),
+                executable: None,
+                message: format!("{discovery_error} {health_error}"),
+            },
         },
     }
 }
@@ -223,13 +247,13 @@ fn syncthing_start(state: State<'_, SyncthingProcess>) -> Result<SyncthingStatus
         return Ok(syncthing_status());
     }
 
-    let executable = env::var("SLIGHT_SYNCTHING_BIN").unwrap_or_else(|_| "syncthing".to_string());
-    let child = Command::new(executable)
+    let executable = find_syncthing_executable()?.ok_or_else(|| {
+        "无法启动 Syncthing。请先安装，或设置 SLIGHT_SYNCTHING_BIN 指向可执行文件。".to_string()
+    })?;
+    let child = Command::new(&executable)
         .arg("--no-browser")
         .spawn()
-        .map_err(|err| {
-            format!("无法启动 Syncthing。请先安装 Syncthing 或设置 SLIGHT_SYNCTHING_BIN：{err}")
-        })?;
+        .map_err(|err| format!("无法启动 Syncthing {}：{err}", executable.display()))?;
 
     let mut guard = state
         .child
@@ -900,6 +924,94 @@ fn apply_new_folder_config(
     }))
 }
 
+fn is_executable_file(path: &Path) -> bool {
+    path.metadata()
+        .map(|metadata| metadata.is_file())
+        .unwrap_or(false)
+}
+
+fn resolve_syncthing_executable(
+    configured: Option<PathBuf>,
+    path_directories: &[PathBuf],
+    common_paths: &[PathBuf],
+) -> Option<PathBuf> {
+    if let Some(configured_path) = configured {
+        if is_executable_file(&configured_path) {
+            return Some(configured_path);
+        }
+        if configured_path.components().count() == 1 {
+            for directory in path_directories {
+                let candidate = directory.join(&configured_path);
+                if is_executable_file(&candidate) {
+                    return Some(candidate);
+                }
+            }
+        }
+        return None;
+    }
+
+    let executable_names: &[&str] = if cfg!(windows) {
+        &["syncthing.exe", "syncthing"]
+    } else {
+        &["syncthing"]
+    };
+    for directory in path_directories {
+        for name in executable_names {
+            let candidate = directory.join(name);
+            if is_executable_file(&candidate) {
+                return Some(candidate);
+            }
+        }
+    }
+    common_paths
+        .iter()
+        .find(|path| is_executable_file(path))
+        .cloned()
+}
+
+fn common_syncthing_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if cfg!(target_os = "macos") {
+        paths.extend([
+            PathBuf::from("/Applications/Syncthing.app/Contents/MacOS/syncthing"),
+            PathBuf::from("/opt/homebrew/bin/syncthing"),
+            PathBuf::from("/usr/local/bin/syncthing"),
+        ]);
+    }
+    if cfg!(target_os = "linux") {
+        paths.extend([
+            PathBuf::from("/usr/bin/syncthing"),
+            PathBuf::from("/usr/local/bin/syncthing"),
+        ]);
+    }
+    if cfg!(windows) {
+        for variable in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
+            if let Some(base) = env::var_os(variable) {
+                paths.push(PathBuf::from(base).join("Syncthing").join("syncthing.exe"));
+            }
+        }
+    }
+    paths
+}
+
+fn find_syncthing_executable() -> Result<Option<PathBuf>, String> {
+    let configured = env::var_os("SLIGHT_SYNCTHING_BIN")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from);
+    let path_directories = env::var_os("PATH")
+        .map(|value| env::split_paths(&value).collect::<Vec<_>>())
+        .unwrap_or_default();
+    let resolved = resolve_syncthing_executable(
+        configured.clone(),
+        &path_directories,
+        &common_syncthing_paths(),
+    );
+    if configured.is_some() && resolved.is_none() {
+        return Err("SLIGHT_SYNCTHING_BIN 指向的 Syncthing 可执行文件不存在。".to_string());
+    }
+    Ok(resolved)
+}
+
 fn syncthing_health() -> Result<String, String> {
     let url = format!("{DEFAULT_SYNCTHING_URL}/rest/noauth/health");
     let response = ureq::get(&url)
@@ -1007,6 +1119,52 @@ mod tests {
             .unwrap()
             .as_nanos();
         env::temp_dir().join(format!("s-light-notes-{test_name}-{unique}"))
+    }
+
+    #[test]
+    fn resolves_configured_and_path_syncthing_executables() {
+        let bin_dir = temporary_notes_dir("syncthing-bin");
+        ensure_directory(&bin_dir).unwrap();
+        let configured_binary = bin_dir.join("custom-syncthing");
+        let path_binary = bin_dir.join(if cfg!(windows) {
+            "syncthing.exe"
+        } else {
+            "syncthing"
+        });
+        fs::write(&configured_binary, b"test").unwrap();
+        fs::write(&path_binary, b"test").unwrap();
+
+        assert_eq!(
+            resolve_syncthing_executable(Some(configured_binary.clone()), &[], &[]),
+            Some(configured_binary)
+        );
+        assert_eq!(
+            resolve_syncthing_executable(None, std::slice::from_ref(&bin_dir), &[]),
+            Some(path_binary)
+        );
+        fs::remove_dir_all(bin_dir).unwrap();
+    }
+
+    #[test]
+    fn configured_syncthing_path_does_not_silently_fall_back() {
+        let common_dir = temporary_notes_dir("syncthing-common");
+        ensure_directory(&common_dir).unwrap();
+        let common_binary = common_dir.join("syncthing");
+        fs::write(&common_binary, b"test").unwrap();
+
+        assert_eq!(
+            resolve_syncthing_executable(
+                Some(PathBuf::from("missing-custom-syncthing")),
+                &[],
+                std::slice::from_ref(&common_binary),
+            ),
+            None
+        );
+        assert_eq!(
+            resolve_syncthing_executable(None, &[], std::slice::from_ref(&common_binary)),
+            Some(common_binary)
+        );
+        fs::remove_dir_all(common_dir).unwrap();
     }
 
     #[test]

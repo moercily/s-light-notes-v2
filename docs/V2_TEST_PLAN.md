@@ -23,6 +23,7 @@
 - From `v2/`, `cargo test --manifest-path src-tauri/Cargo.toml`
   - Verifies unsafe Syncthing proxy paths are rejected.
   - Verifies valid Syncthing REST paths target `127.0.0.1:8384`.
+  - Verifies explicit, `PATH`, and common-location Syncthing executable discovery precedence.
   - Verifies unsafe note IDs cannot escape the default notes directory.
   - Verifies API Key header injection is rejected and a valid key is applied as `X-API-Key`.
   - Verifies Markdown files can be created, read, listed, moved to trash, restored, and permanently deleted in a temporary directory.

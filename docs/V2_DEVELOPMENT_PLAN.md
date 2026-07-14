@@ -44,7 +44,7 @@ The alpha config builds the macOS `.app` target only. DMG packaging remains defe
 - Add sidecar bundling after the external binary path works.
 - Store credentials outside the notes folder.
 
-Current status: health detection and user-triggered process start are implemented. API Keys are passed only with individual localhost proxy requests and are never written by the Rust backend. The current development machine has no `syncthing` executable on `PATH`, so external-binary start and live authenticated validation remain pending.
+Current status: health detection and user-triggered process start are implemented. The desktop backend discovers an explicitly configured binary, the system `PATH`, and documented common installation locations on macOS, Windows, and Linux. It distinguishes an installed-but-stopped engine from a missing engine. API Keys are passed only with individual localhost proxy requests and are never written by the Rust backend. The current development machine still has no discoverable Syncthing executable, so live authenticated validation remains pending.
 
 ## Phase V2.4: Safe Configuration
 
@@ -62,7 +62,7 @@ Current status: health detection and user-triggered process start are implemente
 
 - Validate the confirmed-write flow against a disposable folder on a running Syncthing instance.
 - Validate the credential-aware proxy against a running Syncthing instance.
-- Decide and document the supported external binary locations before adding a bundled sidecar.
+- Validate executable discovery and startup on native Windows and Linux installations before adding a bundled sidecar.
 
 ## Phase V2.5: Real-Device Validation
 
