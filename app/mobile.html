@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#4a90d9">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="s-light notes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>s-light notes</title>
+    <link rel="stylesheet" href="css/mobile.css">
+    <link rel="manifest" href="manifest.mobile.json">
+    <link rel="icon" href="icons/icon.svg">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+</head>
+<body>
+    <main id="mobile-app">
+        <section id="mobile-list-view" class="mobile-view active" aria-label="笔记列表">
+            <header class="mobile-topbar">
+                <h1 id="mobile-list-title">s-light notes</h1>
+                <button id="mobile-settings" class="icon-button" title="设置">☰</button>
+            </header>
+            <div class="mobile-search-row">
+                <input type="search" id="mobile-search" placeholder="搜索笔记">
+            </div>
+            <ul id="mobile-note-list" class="mobile-note-list">
+                <li class="mobile-empty">暂无笔记</li>
+            </ul>
+            <button id="mobile-new-note" class="primary-fab" title="新建笔记">+</button>
+        </section>
+
+        <section id="mobile-editor-view" class="mobile-view" aria-label="编辑笔记">
+            <header class="mobile-topbar">
+                <button id="mobile-back" class="text-button">返回</button>
+                <div class="mobile-title-wrap">
+                    <strong id="mobile-note-title">新建笔记</strong>
+                    <span id="mobile-save-status">就绪</span>
+                </div>
+                <button id="mobile-delete-note" class="icon-button danger" title="删除笔记">删</button>
+            </header>
+            <div id="mobile-editor-scroll">
+                <div id="mobile-note-editor"
+                     contenteditable="true"
+                     placeholder="写下你的想法...&#10;&#10;首行内容会作为笔记标题。">
+                </div>
+            </div>
+            <div id="mobile-format-bar" aria-label="格式工具栏">
+                <button data-format="bold"><strong>B</strong></button>
+                <button data-format="italic"><em>I</em></button>
+                <button data-format="heading">H</button>
+                <button data-format="list">☰</button>
+                <button data-format="link">🔗</button>
+            </div>
+        </section>
+
+        <section id="mobile-settings-view" class="mobile-view" aria-label="设置">
+            <header class="mobile-topbar">
+                <button id="mobile-settings-back" class="text-button">返回</button>
+                <h1>设置</h1>
+                <span class="mobile-topbar-spacer"></span>
+            </header>
+            <div class="settings-list">
+                <button id="mobile-import" class="settings-item">导入 Markdown</button>
+                <button id="mobile-export" class="settings-item">导出备份</button>
+                <button id="mobile-trash" class="settings-item">回收站</button>
+                <button id="mobile-install" class="settings-item" hidden>安装到主屏幕</button>
+                <button id="mobile-theme-toggle" class="settings-item">切换深色模式</button>
+                <p id="mobile-settings-note" class="settings-note">移动端当前默认使用浏览器本地存储。请定期导出备份。</p>
+            </div>
+        </section>
+    </main>
+
+    <script src="js/utils.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/editor.js"></script>
+    <script src="js/mobile.js"></script>
+</body>
+</html>

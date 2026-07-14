@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4a90d9">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>s-light notes</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icons/icon.svg">
+    <link rel="apple-touch-icon" href="icons/icon.svg">
+</head>
+<body>
+    <!-- 移动端侧边栏切换按钮 -->
+    <button id="btn-toggle-sidebar" title="切换侧边栏">☰</button>
+    <div id="sidebar-overlay"></div>
+
+    <!-- 侧边栏：笔记列表 + 搜索 + 操作按钮 -->
+    <aside id="sidebar">
+        <div id="sidebar-header">
+            <h1 id="app-title">s-light notes</h1>
+            <button id="btn-theme-toggle" title="切换深色/浅色模式 (Ctrl+Shift+D)">🌙</button>
+            <button id="btn-new-note" title="新建笔记 (Ctrl+N)">+ 新建笔记</button>
+        </div>
+        <div id="sidebar-search">
+            <input type="search" id="search-box" placeholder="搜索笔记... (Ctrl+F)">
+        </div>
+        <ul id="note-list">
+            <li class="note-list-empty">暂无笔记</li>
+        </ul>
+        <div id="sidebar-footer">
+            <button id="btn-open-folder" class="btn-storage" title="选择本地文件夹存储笔记">📂 打开文件夹</button>
+            <button id="btn-export" class="btn-storage btn-idb-only" title="导出所有笔记为 .md 文件">📥 导出全部</button>
+            <button id="btn-import" class="btn-storage btn-idb-only" title="从 .md 文件导入笔记">📤 导入</button>
+            <button id="btn-show-trash" class="btn-storage" title="查看回收站中的笔记">🗑 回收站</button>
+            <button id="btn-sync-settings" class="btn-storage" title="打开 P2P 同步中心">🔄 同步中心</button>
+            <div id="storage-info">存储模式：未选择</div>
+        </div>
+    </aside>
+
+    <!-- 主编辑区 -->
+    <main id="editor-area">
+        <!-- 顶部工具栏 -->
+        <div id="view-toolbar">
+            <span id="note-title-display"></span>
+            <button id="btn-delete-note" title="删除当前笔记">🗑 删除</button>
+        </div>
+        <div id="conflict-banner" class="conflict-banner hidden">
+            <div>
+                <strong>这是 Syncthing 冲突副本</strong>
+                <span>内容以只读方式打开，不会自动合并。</span>
+            </div>
+            <div class="conflict-actions">
+                <button id="conflict-keep-copy">保留为新笔记</button>
+                <button id="conflict-copy-content">复制内容</button>
+                <button id="conflict-delete-copy" class="btn-danger">删除冲突副本</button>
+            </div>
+        </div>
+
+        <!-- WYSIWYG 编辑区（contenteditable） -->
+        <div id="editor-content">
+            <div id="note-editor"
+                 contenteditable="true"
+                 placeholder="写下你的想法...&#10;&#10;首行内容会作为笔记标题。">
+            </div>
+        </div>
+    </main>
+
+    <!-- 状态栏 -->
+    <footer id="status-bar">
+        <span id="status-storage">存储：--</span>
+        <span id="status-save">--</span>
+        <span id="status-sync">同步：未配置</span>
+        <span id="status-stats">字数：0</span>
+        <span id="status-time">--</span>
+    </footer>
+
+    <!-- 确认删除对话框 -->
+    <div id="confirm-dialog" class="dialog-overlay hidden">
+        <div class="dialog-box">
+            <p id="confirm-message">确定要删除这条笔记吗？</p>
+            <div class="dialog-buttons">
+                <button id="confirm-yes" class="btn-danger">删除</button>
+                <button id="confirm-no">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 冲突提示对话框 -->
+    <div id="conflict-dialog" class="dialog-overlay hidden">
+        <div class="dialog-box">
+            <p>⚠️ 该笔记已在外部被修改。</p>
+            <p>请选择处理方式：</p>
+            <div class="dialog-buttons">
+                <button id="conflict-reload">重新加载外部版本</button>
+                <button id="conflict-overwrite">保留当前内容并保存</button>
+                <button id="conflict-cancel">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Syncthing 同步中心对话框 -->
+    <div id="sync-dialog" class="dialog-overlay hidden">
+        <div class="dialog-box sync-dialog-box">
+            <h2>P2P 同步中心</h2>
+            <p class="dialog-hint">桌面版通过本机安全通道连接 Syncthing。Web/PWA 入口保留连接测试、同步状态、扫描和冲突处理；使用本地代理时填 /syncthing。</p>
+            <div id="sync-center-cards" class="sync-center-cards" aria-live="polite"></div>
+            <label class="sync-field">
+                <span>API 地址</span>
+                <input id="sync-api-base" type="text" value="http://127.0.0.1:8384" spellcheck="false">
+            </label>
+            <button id="sync-use-proxy" class="sync-inline-action">使用本地代理 (/syncthing)</button>
+            <label class="sync-field">
+                <span>API Key</span>
+                <input id="sync-api-key" type="password" autocomplete="off">
+            </label>
+            <label class="sync-checkbox">
+                <input id="sync-remember-key" type="checkbox">
+                <span>记住在本机设备</span>
+            </label>
+            <p id="sync-key-warning" class="dialog-hint hidden">API Key 是高权限凭据。启用记住后，任何能访问本机应用或浏览器数据的人都可能读取它。</p>
+            <div id="sync-test-result" class="sync-test-result">同步：未配置</div>
+            <div id="desktop-path-summary" class="sync-summary-line">桌面默认笔记目录：等待检测</div>
+            <button id="desktop-ensure-notes-folder" class="sync-inline-action">创建默认笔记目录</button>
+            <button id="desktop-open-notes-folder" class="sync-inline-action">打开默认笔记目录</button>
+            <div id="sync-conflict-summary" class="sync-summary-line">冲突：0 个</div>
+            <button id="sync-show-conflicts" class="sync-inline-action" disabled>查看冲突副本</button>
+            <button id="sync-start-engine" class="sync-inline-action">启动同步引擎</button>
+            <div id="sync-readonly-panel" class="sync-readonly-panel hidden">
+                <label class="sync-field">
+                    <span>当前笔记对应的 Syncthing 文件夹</span>
+                    <select id="sync-folder-select">
+                        <option value="">未绑定文件夹</option>
+                    </select>
+                </label>
+                <div id="sync-folder-summary" class="sync-summary-line">文件夹：未绑定</div>
+                <div id="sync-device-summary" class="sync-summary-line">设备：暂无信息</div>
+                <div id="sync-completion-summary" class="sync-summary-line">完成度：暂无远端设备信息</div>
+                <div id="sync-config-assist-summary" class="sync-summary-line">配置辅助：请先连接 Syncthing</div>
+                <button id="sync-scan-now" class="sync-inline-action" disabled>立即扫描</button>
+                <button id="sync-load-config-assist" class="sync-inline-action" disabled>读取配置辅助信息</button>
+                <button id="sync-refresh-status" class="sync-inline-action">刷新同步状态</button>
+                <section id="sync-binding-panel" class="sync-binding-panel">
+                    <h3>默认笔记目录绑定</h3>
+                    <div id="sync-binding-summary" class="sync-summary-line">等待桌面目录和 Syncthing 状态</div>
+                    <label class="sync-field">
+                        <span>Syncthing folder ID</span>
+                        <input id="sync-binding-folder-id" type="text" value="s-light-notes" spellcheck="false">
+                    </label>
+                    <div class="sync-device-field">
+                        <span>共享设备</span>
+                        <div id="sync-binding-devices" class="sync-device-options"></div>
+                    </div>
+                    <button id="sync-preview-binding" class="sync-inline-action" disabled>生成配置预览</button>
+                    <div id="sync-binding-preview" class="sync-binding-preview hidden" aria-live="polite"></div>
+                    <button id="sync-open-confirm-binding" class="sync-confirm-action hidden">继续到二次确认</button>
+                </section>
+            </div>
+            <div class="dialog-buttons">
+                <button id="sync-test-connection">测试连接</button>
+                <button id="sync-open-web">打开 Syncthing</button>
+                <button id="sync-close">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Syncthing folder 配置二次确认 -->
+    <div id="sync-binding-confirm-dialog" class="dialog-overlay hidden">
+        <div class="dialog-box sync-confirm-dialog-box">
+            <h2>确认写入 Syncthing</h2>
+            <div id="sync-binding-confirm-summary" class="sync-confirm-summary"></div>
+            <p class="dialog-hint">确认后将新建一个 Syncthing folder。Syncthing 会立即应用配置；应用会在写入前重新检查冲突，并在写入后回读验证。</p>
+            <div id="sync-binding-confirm-result" class="sync-test-result hidden" aria-live="polite"></div>
+            <div class="dialog-buttons">
+                <button id="sync-binding-confirm-cancel">取消</button>
+                <button id="sync-binding-confirm-apply" class="primary-action">确认写入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 文字选中格式工具栏 -->
+    <div id="format-toolbar" class="hidden">
+        <button data-format="bold" title="加粗 **text**"><strong>B</strong></button>
+        <button data-format="italic" title="斜体 *text*"><em>I</em></button>
+        <button data-format="code" title="行内代码 `text`">&lt;/&gt;</button>
+        <button data-format="heading" title="标题 # text">H</button>
+        <button data-format="list" title="无序列表 - text">☰</button>
+        <button data-format="quote" title="引用 > text">❝</button>
+        <button data-format="link" title="链接 [text](url)">🔗</button>
+    </div>
+
+    <!-- 脚本：按依赖顺序加载 -->
+    <script src="js/utils.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/desktop-service.js"></script>
+    <script src="js/sync.js"></script>
+    <script src="js/sync-service.js"></script>
+    <script src="js/sync-center.js"></script>
+    <script src="js/sidebar.js"></script>
+    <script src="js/editor.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

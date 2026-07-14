@@ -1,0 +1,14 @@
+{
+  "name": "s-light-notes",
+  "version": "2.0.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/structure.test.mjs && node tests/desktop-service.test.mjs && node tests/desktop-storage.test.mjs && node tests/sync-service.test.mjs && node tests/sync-center.test.mjs",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

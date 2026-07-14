@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+.AppleDouble
+._*
+
+# Local dependencies and build output
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+
+# Local environment and editor files
+.env
+.env.*
+*.swp
+*.swo
+*~
+
+# Syncthing metadata must not become project source
+.stfolder/
+.stversions/
+.stignore
+.syncthing.*
