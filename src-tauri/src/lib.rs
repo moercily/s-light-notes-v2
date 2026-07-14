@@ -388,7 +388,17 @@ fn execute_syncthing_request(
     body: Option<&str>,
     api_key: Option<&str>,
 ) -> Result<ProxyResponse, String> {
-    let url = build_syncthing_url(path)?;
+    execute_syncthing_request_at(DEFAULT_SYNCTHING_URL, method, path, body, api_key)
+}
+
+fn execute_syncthing_request_at(
+    api_base: &str,
+    method: &str,
+    path: &str,
+    body: Option<&str>,
+    api_key: Option<&str>,
+) -> Result<ProxyResponse, String> {
+    let url = build_syncthing_url_at(api_base, path)?;
     let agent = ureq::AgentBuilder::new()
         .timeout_read(Duration::from_secs(10))
         .timeout_write(Duration::from_secs(10))
@@ -858,14 +868,15 @@ fn ensure_syncthing_success(
     ))
 }
 
-fn request_syncthing_json(
+fn request_syncthing_json_at(
+    api_base: &str,
     method: &str,
     path: &str,
     body: Option<&str>,
     api_key: &str,
     operation: &str,
 ) -> Result<serde_json::Value, String> {
-    let response = execute_syncthing_request(method, path, body, Some(api_key))?;
+    let response = execute_syncthing_request_at(api_base, method, path, body, Some(api_key))?;
     let response = ensure_syncthing_success(response, operation)?;
     serde_json::from_str(&response.body)
         .map_err(|err| format!("{operation}返回了无法识别的数据：{err}"))
@@ -927,8 +938,17 @@ fn apply_new_folder_config(
     config: &PendingFolderConfig,
     api_key: &str,
 ) -> Result<serde_json::Value, String> {
+    apply_new_folder_config_at(DEFAULT_SYNCTHING_URL, config, api_key)
+}
+
+fn apply_new_folder_config_at(
+    api_base: &str,
+    config: &PendingFolderConfig,
+    api_key: &str,
+) -> Result<serde_json::Value, String> {
     let expected_path = canonical_existing_path(Path::new(&config.path))?;
-    let folders = request_syncthing_json(
+    let folders = request_syncthing_json_at(
+        api_base,
         "GET",
         "/rest/config/folders",
         None,
@@ -940,7 +960,8 @@ fn apply_new_folder_config(
         .ok_or_else(|| "Syncthing folder 配置格式无效。".to_string())?;
     ensure_no_folder_conflicts(folder_list, config, &expected_path)?;
 
-    let template = request_syncthing_json(
+    let template = request_syncthing_json_at(
+        api_base,
         "GET",
         "/rest/config/defaults/folder",
         None,
@@ -951,7 +972,8 @@ fn apply_new_folder_config(
     let payload_text = serde_json::to_string(&payload)
         .map_err(|err| format!("无法生成 Syncthing folder 配置：{err}"))?;
     ensure_syncthing_success(
-        execute_syncthing_request(
+        execute_syncthing_request_at(
+            api_base,
             "POST",
             "/rest/config/folders",
             Some(&payload_text),
@@ -960,7 +982,8 @@ fn apply_new_folder_config(
         "写入 Syncthing folder 配置",
     )?;
 
-    let verification = request_syncthing_json(
+    let verification = request_syncthing_json_at(
+        api_base,
         "GET",
         "/rest/config/folders",
         None,
@@ -980,8 +1003,11 @@ fn apply_new_folder_config(
         .unwrap_or(false);
     if !verified {
         let rollback_path = format!("/rest/config/folders/{}", config.folder_id);
-        let rollback = execute_syncthing_request("DELETE", &rollback_path, None, Some(api_key))
-            .and_then(|response| ensure_syncthing_success(response, "撤销 Syncthing folder 配置"));
+        let rollback =
+            execute_syncthing_request_at(api_base, "DELETE", &rollback_path, None, Some(api_key))
+                .and_then(|response| {
+                    ensure_syncthing_success(response, "撤销 Syncthing folder 配置")
+                });
         return Err(match rollback {
             Ok(_) => "写入后未能验证配置，已撤销本次新建，请重新尝试。".to_string(),
             Err(err) => {
@@ -990,7 +1016,8 @@ fn apply_new_folder_config(
         });
     }
 
-    let restart_required = request_syncthing_json(
+    let restart_required = request_syncthing_json_at(
+        api_base,
         "GET",
         "/rest/config/restart-required",
         None,
@@ -1112,14 +1139,19 @@ fn syncthing_health_with_timeout(timeout: Duration) -> Result<String, String> {
     response.into_string().map_err(|err| err.to_string())
 }
 
+#[cfg(test)]
 fn build_syncthing_url(path: &str) -> Result<String, String> {
+    build_syncthing_url_at(DEFAULT_SYNCTHING_URL, path)
+}
+
+fn build_syncthing_url_at(api_base: &str, path: &str) -> Result<String, String> {
     if !path.starts_with('/') {
         return Err("Syncthing API path 必须以 / 开头。".to_string());
     }
     if path.contains("://") || path.contains("..") {
         return Err("Syncthing API path 不安全。".to_string());
     }
-    Ok(format!("{DEFAULT_SYNCTHING_URL}{path}"))
+    Ok(format!("{}{path}", api_base.trim_end_matches('/')))
 }
 
 fn validate_api_key(api_key: Option<&str>) -> Result<Option<&str>, String> {
@@ -1170,6 +1202,10 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{ErrorKind, Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::Arc;
+    use std::thread::{self, JoinHandle};
 
     #[test]
     fn rejects_relative_proxy_paths() {
@@ -1210,6 +1246,134 @@ mod tests {
             .unwrap()
             .as_nanos();
         env::temp_dir().join(format!("s-light-notes-{test_name}-{unique}"))
+    }
+
+    #[derive(Debug, Clone)]
+    struct CapturedHttpRequest {
+        method: String,
+        path: String,
+        headers: HashMap<String, String>,
+        body: String,
+    }
+
+    fn read_http_request(stream: &mut TcpStream) -> CapturedHttpRequest {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut data = Vec::new();
+        let mut buffer = [0_u8; 2048];
+        let mut expected_length = None;
+        loop {
+            let count = stream.read(&mut buffer).unwrap();
+            if count == 0 {
+                break;
+            }
+            data.extend_from_slice(&buffer[..count]);
+            if expected_length.is_none() {
+                if let Some(header_end) = data.windows(4).position(|window| window == b"\r\n\r\n") {
+                    let headers = String::from_utf8_lossy(&data[..header_end]);
+                    let content_length = headers
+                        .lines()
+                        .find_map(|line| {
+                            let (name, value) = line.split_once(':')?;
+                            name.eq_ignore_ascii_case("content-length")
+                                .then(|| value.trim().parse::<usize>().ok())
+                                .flatten()
+                        })
+                        .unwrap_or(0);
+                    expected_length = Some(header_end + 4 + content_length);
+                }
+            }
+            if expected_length.is_some_and(|length| data.len() >= length) {
+                break;
+            }
+        }
+
+        let header_end = data
+            .windows(4)
+            .position(|window| window == b"\r\n\r\n")
+            .unwrap();
+        let header_text = String::from_utf8_lossy(&data[..header_end]);
+        let mut lines = header_text.lines();
+        let request_line = lines.next().unwrap();
+        let mut request_parts = request_line.split_whitespace();
+        let method = request_parts.next().unwrap().to_string();
+        let path = request_parts.next().unwrap().to_string();
+        let headers = lines
+            .filter_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                Some((name.to_ascii_lowercase(), value.trim().to_string()))
+            })
+            .collect();
+        let body = String::from_utf8_lossy(&data[header_end + 4..]).to_string();
+        CapturedHttpRequest {
+            method,
+            path,
+            headers,
+            body,
+        }
+    }
+
+    fn write_json_response(stream: &mut TcpStream, status: u16, body: &str) {
+        let reason = if status == 200 { "OK" } else { "Error" };
+        let response = format!(
+            "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+    }
+
+    fn spawn_folder_config_server(
+        verify_write: bool,
+    ) -> (String, Arc<Mutex<Vec<CapturedHttpRequest>>>, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let api_base = format!("http://{}", listener.local_addr().unwrap());
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&requests);
+        let handle = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let mut folder_reads = 0;
+            let mut stored_folder: Option<serde_json::Value> = None;
+            while captured.lock().unwrap().len() < 5 && Instant::now() < deadline {
+                let (mut stream, _) = match listener.accept() {
+                    Ok(connection) => connection,
+                    Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                    Err(err) => panic!("mock Syncthing listener failed: {err}"),
+                };
+                let request = read_http_request(&mut stream);
+                let response_body = match (request.method.as_str(), request.path.as_str()) {
+                    ("GET", "/rest/config/folders") => {
+                        folder_reads += 1;
+                        if folder_reads == 1 || !verify_write {
+                            "[]".to_string()
+                        } else {
+                            serde_json::to_string(&vec![stored_folder.clone().unwrap()]).unwrap()
+                        }
+                    }
+                    ("GET", "/rest/config/defaults/folder") => {
+                        r#"{"type":"sendreceive","devices":[]}"#.to_string()
+                    }
+                    ("POST", "/rest/config/folders") => {
+                        stored_folder = Some(serde_json::from_str(&request.body).unwrap());
+                        "{}".to_string()
+                    }
+                    ("GET", "/rest/config/restart-required") => {
+                        r#"{"requiresRestart":false}"#.to_string()
+                    }
+                    ("DELETE", path) if path.starts_with("/rest/config/folders/") => {
+                        "{}".to_string()
+                    }
+                    _ => "{}".to_string(),
+                };
+                captured.lock().unwrap().push(request);
+                write_json_response(&mut stream, 200, &response_body);
+            }
+        });
+        (api_base, requests, handle)
     }
 
     #[test]
@@ -1486,6 +1650,82 @@ mod tests {
         })];
         assert!(ensure_no_folder_conflicts(&path_conflict, &config, &expected_path).is_err());
         assert!(ensure_no_folder_conflicts(&[], &config, &expected_path).is_ok());
+        fs::remove_dir_all(notes_dir).unwrap();
+    }
+
+    #[test]
+    fn confirmed_write_uses_authenticated_syncthing_protocol() {
+        let notes_dir = temporary_notes_dir("confirmed-http-success");
+        ensure_directory(&notes_dir).unwrap();
+        let mut config = pending_config(Instant::now());
+        config.path = canonical_existing_path(&notes_dir)
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        let (api_base, requests, server) = spawn_folder_config_server(true);
+
+        let result = apply_new_folder_config_at(&api_base, &config, "integration-key").unwrap();
+        server.join().unwrap();
+        let captured = requests.lock().unwrap().clone();
+
+        assert_eq!(result["applied"], true);
+        assert_eq!(result["restartRequired"], false);
+        assert_eq!(captured.len(), 5);
+        assert_eq!(
+            captured
+                .iter()
+                .map(|request| format!("{} {}", request.method, request.path))
+                .collect::<Vec<_>>(),
+            vec![
+                "GET /rest/config/folders",
+                "GET /rest/config/defaults/folder",
+                "POST /rest/config/folders",
+                "GET /rest/config/folders",
+                "GET /rest/config/restart-required",
+            ]
+        );
+        assert!(captured.iter().all(|request| {
+            request.headers.get("x-api-key").map(String::as_str) == Some("integration-key")
+        }));
+        let post = captured
+            .iter()
+            .find(|request| request.method == "POST")
+            .unwrap();
+        assert_eq!(
+            post.headers.get("content-type").map(String::as_str),
+            Some("application/json")
+        );
+        let payload: serde_json::Value = serde_json::from_str(&post.body).unwrap();
+        assert_eq!(payload["id"], "s-light-notes");
+        assert_eq!(payload["path"], config.path);
+        assert_eq!(payload["devices"][0]["deviceID"], "DEVICE-A");
+        fs::remove_dir_all(notes_dir).unwrap();
+    }
+
+    #[test]
+    fn confirmed_write_rolls_back_when_readback_does_not_match() {
+        let notes_dir = temporary_notes_dir("confirmed-http-rollback");
+        ensure_directory(&notes_dir).unwrap();
+        let mut config = pending_config(Instant::now());
+        config.path = canonical_existing_path(&notes_dir)
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        let (api_base, requests, server) = spawn_folder_config_server(false);
+
+        let error = apply_new_folder_config_at(&api_base, &config, "integration-key")
+            .expect_err("verification mismatch should roll back");
+        server.join().unwrap();
+        let captured = requests.lock().unwrap().clone();
+
+        assert!(error.contains("已撤销本次新建"));
+        assert_eq!(captured.len(), 5);
+        assert_eq!(captured[4].method, "DELETE");
+        assert_eq!(captured[4].path, "/rest/config/folders/s-light-notes");
+        assert_eq!(
+            captured[4].headers.get("x-api-key").map(String::as_str),
+            Some("integration-key")
+        );
         fs::remove_dir_all(notes_dir).unwrap();
     }
 }

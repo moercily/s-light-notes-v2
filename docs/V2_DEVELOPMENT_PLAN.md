@@ -56,12 +56,13 @@ Current status: health detection and user-triggered process start are implemente
 - [x] Issue a five-minute, single-use confirmation token without storing the API Key.
 - [x] Re-read folder configuration immediately before writing and reject new ID/path conflicts.
 - [x] Verify the new folder after writing and attempt rollback if verification fails.
+- [x] Validate the authenticated create/readback/rollback request sequence against a temporary local protocol fixture.
 - Never mutate Syncthing configuration without a second confirmation.
 
 ## Next Development Step
 
 - Validate the confirmed-write flow against a disposable folder on a running Syncthing instance.
-- Validate the credential-aware proxy against a running Syncthing instance.
+- Validate the already protocol-tested credential-aware proxy against a running Syncthing instance.
 - Validate executable discovery and startup on native Windows and Linux installations before adding a bundled sidecar.
 
 ## Phase V2.5: Real-Device Validation

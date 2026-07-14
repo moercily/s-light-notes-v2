@@ -31,6 +31,7 @@
   - Verifies configuration previews do not write, recognize an existing binding, reject outside paths, and reject duplicate folder IDs.
   - Verifies confirmation tokens are single-use, expire after five minutes, and are required before a write plan can be obtained.
   - Verifies confirmed writes recheck folder ID/path conflicts and preserve the Syncthing default folder template.
+  - Verifies the authenticated GET, POST, readback, restart-status, and rollback DELETE sequence against a temporary loopback server.
 
 - From `v2/`, `npm run tauri:build`
   - Verifies the Tauri desktop shell compiles.
