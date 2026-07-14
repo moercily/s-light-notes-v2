@@ -57,6 +57,7 @@ In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible.
 
 - The backend only targets `http://127.0.0.1:8384` in the alpha implementation.
 - External engine discovery checks `SLIGHT_SYNCTHING_BIN`, the process `PATH`, and common native install paths. An invalid explicit path fails without silently choosing another binary.
+- After a user-triggered start, the backend polls local health for a bounded period, reports an early exit, and keeps a live process handle so only app-managed Syncthing can be stopped.
 - Proxy paths must start with `/` and must not contain `://` or `..`.
 - API keys must not be stored in the notes folder.
 - API keys are validated against header injection and attached only to the current localhost request as `X-API-Key`; the Rust backend does not persist them.

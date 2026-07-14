@@ -74,8 +74,35 @@ async function testReportsDesktopMarkdownStorage() {
   assert.match(model.localSave.detail, /Syncthing/);
 }
 
+async function testReportsManagedEngineLifecycle() {
+  const SyncCenter = await loadSyncCenter();
+  const starting = SyncCenter.createModel({
+    appState: { sync: {} },
+    desktopStatus: {
+      available: true,
+      running: false,
+      managed: true,
+      message: 'waiting for health',
+    },
+  });
+  const running = SyncCenter.createModel({
+    appState: { sync: {} },
+    desktopStatus: {
+      available: true,
+      running: true,
+      managed: true,
+      message: 'healthy',
+    },
+  });
+
+  assert.equal(starting.engine.value, '正在启动');
+  assert.equal(starting.engine.detail, 'waiting for health');
+  assert.equal(running.engine.value, '由应用托管');
+}
+
 await testSeparatesLocalSaveFromP2pSync();
 await testExplainsDesktopBackendAvailability();
 await testReportsDesktopMarkdownStorage();
+await testReportsManagedEngineLifecycle();
 
 console.log('sync-center tests passed');

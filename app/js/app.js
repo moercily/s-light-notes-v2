@@ -375,7 +375,9 @@ async function onSyncStartEngine() {
 
     try {
         AppState.syncDesktopStatus = await syncService.startEngine();
-        resultEl.className = AppState.syncDesktopStatus.running ? 'sync-test-result success' : 'sync-test-result error';
+        resultEl.className = AppState.syncDesktopStatus.running
+            ? 'sync-test-result success'
+            : (AppState.syncDesktopStatus.managed ? 'sync-test-result' : 'sync-test-result error');
         resultEl.textContent = AppState.syncDesktopStatus.message || (AppState.syncDesktopStatus.running ? '同步引擎已启动。' : '同步引擎未运行。');
     } catch (err) {
         AppState.syncDesktopStatus = {

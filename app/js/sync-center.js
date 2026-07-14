@@ -54,6 +54,10 @@
             return card('同步引擎', desktopStatus.managed ? '由应用托管' : '已检测到 Syncthing', desktopStatus.message || '');
         }
 
+        if (desktopStatus.managed) {
+            return card('同步引擎', '正在启动', desktopStatus.message || 'Syncthing 管理接口尚未就绪。');
+        }
+
         if (desktopStatus.available === false) {
             return card('同步引擎', '桌面同步引擎不可用', desktopStatus.message || '请在桌面版中启动或安装 Syncthing。');
         }

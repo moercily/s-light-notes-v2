@@ -11,11 +11,20 @@ use tauri::{AppHandle, Manager, State};
 
 const DEFAULT_SYNCTHING_URL: &str = "http://127.0.0.1:8384";
 const CONFIG_CONFIRMATION_TTL: Duration = Duration::from_secs(300);
+const SYNCTHING_STARTUP_ATTEMPTS: usize = 30;
+const SYNCTHING_STARTUP_INTERVAL: Duration = Duration::from_millis(250);
 static CONFIG_TOKEN_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
 struct SyncthingProcess {
     child: Mutex<Option<Child>>,
+}
+
+#[derive(Debug, PartialEq)]
+enum ManagedProcessInspection {
+    NotManaged,
+    Running,
+    Exited(Option<i32>),
 }
 
 #[derive(Default)]
@@ -198,13 +207,12 @@ fn desktop_delete_note(app: AppHandle, request: NoteTargetRequest) -> Result<(),
     permanently_delete_note(&notes_dir, &request.id)
 }
 
-#[tauri::command]
-fn syncthing_status() -> SyncthingStatus {
+fn syncthing_status_snapshot(managed: bool) -> SyncthingStatus {
     match syncthing_health() {
         Ok(message) => SyncthingStatus {
             available: true,
             running: true,
-            managed: false,
+            managed,
             api_base: DEFAULT_SYNCTHING_URL.to_string(),
             executable: find_syncthing_executable()
                 .ok()
@@ -216,10 +224,14 @@ fn syncthing_status() -> SyncthingStatus {
             Ok(Some(path)) => SyncthingStatus {
                 available: true,
                 running: false,
-                managed: false,
+                managed,
                 api_base: DEFAULT_SYNCTHING_URL.to_string(),
                 executable: Some(path.to_string_lossy().to_string()),
-                message: "已检测到 Syncthing，但当前没有运行。".to_string(),
+                message: if managed {
+                    "Syncthing 进程正在启动，管理接口尚未就绪。".to_string()
+                } else {
+                    "已检测到 Syncthing，但当前没有运行。".to_string()
+                },
             },
             Ok(None) => SyncthingStatus {
                 available: false,
@@ -241,10 +253,62 @@ fn syncthing_status() -> SyncthingStatus {
     }
 }
 
+fn inspect_managed_process(state: &SyncthingProcess) -> Result<ManagedProcessInspection, String> {
+    let mut guard = state
+        .child
+        .lock()
+        .map_err(|_| "无法读取 Syncthing 进程状态。".to_string())?;
+    let inspection = match guard.as_mut() {
+        None => ManagedProcessInspection::NotManaged,
+        Some(child) => match child
+            .try_wait()
+            .map_err(|err| format!("无法检查 Syncthing 进程：{err}"))?
+        {
+            None => ManagedProcessInspection::Running,
+            Some(status) => ManagedProcessInspection::Exited(status.code()),
+        },
+    };
+    if matches!(inspection, ManagedProcessInspection::Exited(_)) {
+        guard.take();
+    }
+    Ok(inspection)
+}
+
+fn format_managed_exit(code: Option<i32>) -> String {
+    match code {
+        Some(value) => format!("应用启动的 Syncthing 已提前退出，退出码：{value}。"),
+        None => "应用启动的 Syncthing 已提前退出。".to_string(),
+    }
+}
+
+#[tauri::command]
+fn syncthing_status(state: State<'_, SyncthingProcess>) -> SyncthingStatus {
+    match inspect_managed_process(&state) {
+        Ok(ManagedProcessInspection::Running) => syncthing_status_snapshot(true),
+        Ok(ManagedProcessInspection::Exited(code)) => {
+            let mut status = syncthing_status_snapshot(false);
+            if !status.running {
+                status.message = format_managed_exit(code);
+            }
+            status
+        }
+        Ok(ManagedProcessInspection::NotManaged) => syncthing_status_snapshot(false),
+        Err(err) => {
+            let mut status = syncthing_status_snapshot(false);
+            status.message = err;
+            status
+        }
+    }
+}
+
 #[tauri::command]
 fn syncthing_start(state: State<'_, SyncthingProcess>) -> Result<SyncthingStatus, String> {
+    let already_managed = matches!(
+        inspect_managed_process(&state)?,
+        ManagedProcessInspection::Running
+    );
     if syncthing_health().is_ok() {
-        return Ok(syncthing_status());
+        return Ok(syncthing_status_snapshot(already_managed));
     }
 
     let executable = find_syncthing_executable()?.ok_or_else(|| {
@@ -261,8 +325,22 @@ fn syncthing_start(state: State<'_, SyncthingProcess>) -> Result<SyncthingStatus
         .map_err(|_| "无法记录 Syncthing 进程状态。".to_string())?;
     *guard = Some(child);
 
-    std::thread::sleep(Duration::from_millis(800));
-    Ok(syncthing_status())
+    for _ in 0..SYNCTHING_STARTUP_ATTEMPTS {
+        if syncthing_health_with_timeout(SYNCTHING_STARTUP_INTERVAL).is_ok() {
+            return Ok(syncthing_status_snapshot(true));
+        }
+        match inspect_managed_process(&state)? {
+            ManagedProcessInspection::Running => {
+                std::thread::sleep(SYNCTHING_STARTUP_INTERVAL);
+            }
+            ManagedProcessInspection::Exited(code) => return Err(format_managed_exit(code)),
+            ManagedProcessInspection::NotManaged => {
+                return Err("Syncthing 启动进程状态丢失，请重新尝试。".to_string());
+            }
+        }
+    }
+
+    Ok(syncthing_status_snapshot(true))
 }
 
 #[tauri::command]
@@ -273,12 +351,21 @@ fn syncthing_stop(state: State<'_, SyncthingProcess>) -> Result<SyncthingStatus,
         .map_err(|_| "无法读取 Syncthing 进程状态。".to_string())?;
 
     if let Some(mut child) = guard.take() {
-        child
-            .kill()
-            .map_err(|err| format!("无法停止由 s-light notes 启动的 Syncthing：{err}"))?;
+        if child
+            .try_wait()
+            .map_err(|err| format!("无法检查 Syncthing 进程：{err}"))?
+            .is_none()
+        {
+            child
+                .kill()
+                .map_err(|err| format!("无法停止由 s-light notes 启动的 Syncthing：{err}"))?;
+            child
+                .wait()
+                .map_err(|err| format!("等待 Syncthing 停止时发生错误：{err}"))?;
+        }
     }
 
-    Ok(syncthing_status())
+    Ok(syncthing_status_snapshot(false))
 }
 
 #[tauri::command]
@@ -1013,9 +1100,13 @@ fn find_syncthing_executable() -> Result<Option<PathBuf>, String> {
 }
 
 fn syncthing_health() -> Result<String, String> {
+    syncthing_health_with_timeout(Duration::from_secs(3))
+}
+
+fn syncthing_health_with_timeout(timeout: Duration) -> Result<String, String> {
     let url = format!("{DEFAULT_SYNCTHING_URL}/rest/noauth/health");
     let response = ureq::get(&url)
-        .timeout(Duration::from_secs(3))
+        .timeout(timeout)
         .call()
         .map_err(|err| format!("Syncthing 未运行或无法访问：{err}"))?;
     response.into_string().map_err(|err| err.to_string())
@@ -1165,6 +1256,40 @@ mod tests {
             Some(common_binary)
         );
         fs::remove_dir_all(common_dir).unwrap();
+    }
+
+    fn completed_test_child(exit_code: i32) -> Child {
+        #[cfg(windows)]
+        let mut child = Command::new("cmd")
+            .args(["/C", &format!("exit {exit_code}")])
+            .spawn()
+            .unwrap();
+        #[cfg(not(windows))]
+        let mut child = Command::new("sh")
+            .args(["-c", &format!("exit {exit_code}")])
+            .spawn()
+            .unwrap();
+        child.wait().unwrap();
+        child
+    }
+
+    #[test]
+    fn managed_process_inspection_cleans_up_exited_children() {
+        let state = SyncthingProcess::default();
+        *state.child.lock().unwrap() = Some(completed_test_child(7));
+
+        assert_eq!(
+            inspect_managed_process(&state).unwrap(),
+            ManagedProcessInspection::Exited(Some(7))
+        );
+        assert_eq!(
+            inspect_managed_process(&state).unwrap(),
+            ManagedProcessInspection::NotManaged
+        );
+        assert_eq!(
+            format_managed_exit(Some(7)),
+            "应用启动的 Syncthing 已提前退出，退出码：7。"
+        );
     }
 
     #[test]
