@@ -1,0 +1,25 @@
+{
+  "product": "Syncthing",
+  "version": "v2.1.2",
+  "license": "MPL-2.0",
+  "source": "https://github.com/syncthing/syncthing/releases/tag/v2.1.2",
+  "archive": {
+    "name": "syncthing-macos-arm64-v2.1.2.zip",
+    "url": "https://github.com/syncthing/syncthing/releases/download/v2.1.2/syncthing-macos-arm64-v2.1.2.zip",
+    "sha256": "fa2002f320170b64f226ff65831ccec516b59d7bba365acb51731dd079e52d1a"
+  },
+  "binary": {
+    "target": "aarch64-apple-darwin",
+    "name": "syncthing-sidecar-aarch64-apple-darwin",
+    "sha256": "0325655f864024e0eecd78df07bdedbad46cefc91f480503ff615b6211081869"
+  },
+  "compatibility": {
+    "syncthingConfigVersion": 52,
+    "restApi": "v2.1.2"
+  },
+  "verification": {
+    "archiveHashMatchedOfficialSignedManifest": true,
+    "pgpSignatureVerifiedLocally": false,
+    "note": "The host did not have GnuPG installed; the archive SHA-256 was matched against Syncthing's official signed checksum manifest."
+  }
+}

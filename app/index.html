@@ -104,22 +104,24 @@
     <div id="sync-dialog" class="dialog-overlay hidden">
         <div class="dialog-box sync-dialog-box">
             <h2>P2P 同步中心</h2>
-            <p class="dialog-hint">桌面版通过本机安全通道连接 Syncthing。Web/PWA 入口保留连接测试、同步状态、扫描和冲突处理；使用本地代理时填 /syncthing。</p>
+            <p class="dialog-hint">桌面版会自动管理本机 P2P 同步引擎。Web/PWA 入口仍可连接用户已有的 Syncthing。</p>
             <div id="sync-center-cards" class="sync-center-cards" aria-live="polite"></div>
-            <label class="sync-field">
-                <span>API 地址</span>
-                <input id="sync-api-base" type="text" value="http://127.0.0.1:8384" spellcheck="false">
-            </label>
-            <button id="sync-use-proxy" class="sync-inline-action">使用本地代理 (/syncthing)</button>
-            <label class="sync-field">
-                <span>API Key</span>
-                <input id="sync-api-key" type="password" autocomplete="off">
-            </label>
-            <label class="sync-checkbox">
-                <input id="sync-remember-key" type="checkbox">
-                <span>记住在本机设备</span>
-            </label>
-            <p id="sync-key-warning" class="dialog-hint hidden">API Key 是高权限凭据。启用记住后，任何能访问本机应用或浏览器数据的人都可能读取它。</p>
+            <section id="sync-advanced-connection">
+                <label class="sync-field">
+                    <span>API 地址</span>
+                    <input id="sync-api-base" type="text" value="http://127.0.0.1:8384" spellcheck="false">
+                </label>
+                <button id="sync-use-proxy" class="sync-inline-action">使用本地代理 (/syncthing)</button>
+                <label class="sync-field">
+                    <span>API Key</span>
+                    <input id="sync-api-key" type="password" autocomplete="off">
+                </label>
+                <label class="sync-checkbox">
+                    <input id="sync-remember-key" type="checkbox">
+                    <span>记住在本机设备</span>
+                </label>
+                <p id="sync-key-warning" class="dialog-hint hidden">API Key 是高权限凭据。启用记住后，任何能访问本机应用或浏览器数据的人都可能读取它。</p>
+            </section>
             <div id="sync-test-result" class="sync-test-result">同步：未配置</div>
             <div id="desktop-path-summary" class="sync-summary-line">桌面默认笔记目录：等待检测</div>
             <button id="desktop-ensure-notes-folder" class="sync-inline-action">创建默认笔记目录</button>
@@ -127,8 +129,30 @@
             <div id="sync-conflict-summary" class="sync-summary-line">冲突：0 个</div>
             <button id="sync-show-conflicts" class="sync-inline-action" disabled>查看冲突副本</button>
             <button id="sync-start-engine" class="sync-inline-action">启动同步引擎</button>
-            <div id="sync-readonly-panel" class="sync-readonly-panel hidden">
+            <section id="sync-pairing-panel" class="sync-pairing-panel hidden">
+                <h3>连接另一台设备</h3>
+                <p class="dialog-hint">两台设备需要互相确认。先把本机代码发给另一台设备，再输入对方的设备代码。</p>
+                <span class="sync-field-label">本机设备代码</span>
+                <div class="sync-device-code-row">
+                    <code id="sync-local-device-id">等待同步引擎</code>
+                    <button id="sync-copy-device-id" type="button" title="复制本机设备代码">复制</button>
+                </div>
+                <div id="sync-paired-devices" class="sync-paired-devices"></div>
                 <label class="sync-field">
+                    <span>另一台设备的名称</span>
+                    <input id="sync-pair-device-name" type="text" maxlength="64" placeholder="例如：书房电脑" autocomplete="off">
+                </label>
+                <label class="sync-field">
+                    <span>另一台设备的代码</span>
+                    <input id="sync-pair-device-id" type="text" spellcheck="false" autocomplete="off" placeholder="XXXXXXX-XXXXXXX-...">
+                </label>
+                <button id="sync-preview-pairing" class="sync-inline-action">检查设备代码</button>
+                <div id="sync-pairing-preview" class="sync-binding-preview hidden" aria-live="polite"></div>
+                <button id="sync-confirm-pairing" class="sync-confirm-action hidden">确认添加并共享笔记</button>
+                <div id="sync-pairing-result" class="sync-test-result hidden" aria-live="polite"></div>
+            </section>
+            <div id="sync-readonly-panel" class="sync-readonly-panel hidden">
+                <label id="sync-folder-field" class="sync-field">
                     <span>当前笔记对应的 Syncthing 文件夹</span>
                     <select id="sync-folder-select">
                         <option value="">未绑定文件夹</option>

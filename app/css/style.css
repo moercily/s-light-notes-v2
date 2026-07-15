@@ -441,6 +441,85 @@ body {
     display: none;
 }
 
+#sync-advanced-connection.hidden {
+    display: none;
+}
+
+.sync-pairing-panel {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.sync-pairing-panel.hidden {
+    display: none;
+}
+
+.sync-pairing-panel h3 {
+    margin: 0 0 6px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.sync-field-label {
+    display: block;
+    margin-top: 12px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.sync-device-code-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 6px;
+    margin-top: 5px;
+}
+
+.sync-device-code-row code {
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 11px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.sync-device-code-row button {
+    min-width: 52px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.sync-paired-devices {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.sync-paired-device {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.sync-paired-device span:first-child {
+    overflow-wrap: anywhere;
+}
+
+.sync-paired-device-state {
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
 .sync-summary-line {
     margin-top: 10px;
     color: var(--text-secondary);

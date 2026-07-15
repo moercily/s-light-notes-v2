@@ -49,7 +49,30 @@
 - Confirm delete, restore, and permanent delete behave consistently with v1.
 - Confirm v1 browser entry still opens `index.html` normally.
 
-## Syncthing Manual Tests
+## Bundled Sidecar Tests
+
+macOS Apple Silicon packaged-app validation passed on 2026-07-15: the bundle contained the pinned arm64 binary, automatically started it beside an existing system Syncthing instance, used isolated ports and app data, created the default folder binding, preserved a private backend credential, and stopped the sidecar when the app closed.
+
+- Clean machine without Syncthing installed: the packaged app starts its bundled engine.
+- Existing system Syncthing: the bundled engine uses a separate home and port without modifying the system instance.
+- First run: device identity, backend API Key, notes folder, and folder binding are created without raw configuration UI.
+- Restart and upgrade: device identity and folder binding survive app restart and sidecar version update.
+- Port conflict, missing/wrong-architecture binary, corrupted config, and early process exit produce actionable messages.
+- API Key does not appear in frontend state, synchronized Markdown files, logs, or user-visible diagnostics.
+- macOS Apple Silicon/Intel, Windows x64, and Linux x64 packages contain the correct target-triple sidecar.
+- The sidecar cannot expose its REST/GUI endpoint to the LAN through any frontend-provided value.
+
+## Device Pairing Tests
+
+- The standard desktop UI shows a local device code without exposing API addresses, ports, or API Keys.
+- An incomplete, malformed, local, or already-configured device ID is rejected before configuration writes.
+- Pairing preview shows the normalized remote device ID, device name, default notes sharing, token lifetime, and mutual-confirmation requirement.
+- Confirmation adds exactly one remote device and patches only the device list of `s-light-notes`.
+- Device and folder configuration are read back after writing; a failed share or verification triggers rollback.
+- A configured but disconnected remote device is shown as waiting for confirmation; a live connection is shown as connected.
+- Pairing Tauri invocations contain no API Key, arbitrary folder path, device address, or raw Syncthing configuration.
+
+## External Syncthing Manual Tests
 
 - Syncthing not installed: app shows a clear unavailable state.
 - Syncthing installed but stopped: app can attempt start or explain failure.
@@ -73,6 +96,8 @@
 
 ## Mobile Tests
 
-- Android opens the mobile entry and imports/uses a Syncthing-Fork synchronized folder workflow.
-- iOS opens the PWA/mobile entry and uses Möbius Sync or import/export workflow.
+- Android validates the in-app engine lifecycle, foreground-service notification, battery restrictions, storage permissions, and process recovery.
+- iOS validates foreground sync, opportunistic background tasks, suspended-state recovery, and clear last-sync status.
+- Android also verifies compatibility with a Syncthing-Fork synchronized folder during migration.
+- iOS keeps Möbius Sync or import/export as a fallback until the embedded engine is release-ready.
 - Mobile UI does not depend on desktop-only Tauri commands.

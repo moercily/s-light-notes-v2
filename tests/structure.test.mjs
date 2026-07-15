@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 
 const duplicateRootFilesMustNotExist = [
@@ -17,6 +18,9 @@ const v2MustExist = [
   'app/js/sync-center.js',
   'app/js/sync-service.js',
   'src-tauri/tauri.conf.json',
+  'src-tauri/binaries/SYNCTHING_SIDECAR.json',
+  'src-tauri/binaries/syncthing-sidecar-aarch64-apple-darwin',
+  'src-tauri/binaries/notices/SYNCTHING_LICENSE.txt',
   'docs/V2_DEVELOPMENT_PLAN.md',
   'tests/sync-service.test.mjs',
   'tests/desktop-storage.test.mjs',
@@ -36,9 +40,29 @@ assert.equal(
   true,
   'plain HTML desktop builds require window.__TAURI__ to be injected'
 );
+assert.deepEqual(
+  tauriConfig.bundle.externalBin,
+  ['binaries/syncthing-sidecar'],
+  'desktop packages should bundle Syncthing through Tauri externalBin'
+);
+
+const sidecarMetadata = JSON.parse(readFileSync('src-tauri/binaries/SYNCTHING_SIDECAR.json', 'utf8'));
+assert.equal(sidecarMetadata.version, 'v2.1.2');
+assert.equal(sidecarMetadata.binary.target, 'aarch64-apple-darwin');
+assert.equal(sidecarMetadata.compatibility.syncthingConfigVersion, 52);
+const sidecarHash = createHash('sha256')
+  .update(readFileSync('src-tauri/binaries/syncthing-sidecar-aarch64-apple-darwin'))
+  .digest('hex');
+assert.equal(sidecarHash, sidecarMetadata.binary.sha256, 'bundled sidecar should match pinned metadata');
+assert.deepEqual(
+  tauriConfig.bundle.resources,
+  ['binaries/SYNCTHING_SIDECAR.json', 'binaries/notices/SYNCTHING_LICENSE.txt'],
+  'sidecar provenance and license should ship with the application'
+);
 
 const desktopHtml = readFileSync('app/index.html', 'utf8');
 for (const id of [
+  'sync-advanced-connection',
   'sync-binding-panel',
   'sync-binding-folder-id',
   'sync-binding-devices',
@@ -48,6 +72,12 @@ for (const id of [
   'sync-binding-confirm-dialog',
   'sync-binding-confirm-summary',
   'sync-binding-confirm-apply',
+  'sync-pairing-panel',
+  'sync-local-device-id',
+  'sync-copy-device-id',
+  'sync-pair-device-id',
+  'sync-preview-pairing',
+  'sync-confirm-pairing',
 ]) {
   assert.match(desktopHtml, new RegExp(`id=["']${id}["']`), `${id} should exist in the sync center`);
 }

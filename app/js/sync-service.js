@@ -277,6 +277,27 @@
             });
         },
 
+        async getPairingInfo() {
+            return invokeDesktop('syncthing_pairing_info');
+        },
+
+        async previewDevicePairing(deviceId, deviceName) {
+            return invokeDesktop('syncthing_preview_device_pairing', {
+                request: {
+                    deviceId: (deviceId || '').trim(),
+                    deviceName: (deviceName || '').trim(),
+                },
+            });
+        },
+
+        async confirmDevicePairing(confirmationToken) {
+            return invokeDesktop('syncthing_confirm_device_pairing', {
+                request: {
+                    confirmationToken: confirmationToken,
+                },
+            });
+        },
+
         async getDevices(options) {
             const invoke = getInvoke();
             if (invoke) return proxyJson('GET', '/rest/config/devices', currentApiKey(options));

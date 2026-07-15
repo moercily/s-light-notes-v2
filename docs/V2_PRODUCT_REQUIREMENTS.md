@@ -14,16 +14,18 @@ s-light notes v2 is a P2P synced Markdown notes app. Notes remain ordinary `.md`
 
 - Desktop users install and open a normal app.
 - The app creates or selects a notes folder.
-- The app detects or starts Syncthing where possible.
+- Desktop release packages include and automatically manage a Syncthing sidecar.
+- Normal users do not install, start, or manually configure a separate Syncthing application.
+- Device connection uses an in-app pairing flow instead of API addresses, ports, or API Keys.
 - The app shows P2P sync status in a dedicated sync center.
 - The app keeps editing usable when Syncthing is unavailable.
 
 ## Platform Policy
 
-- Desktop is the primary v2 platform: macOS, Windows, and Linux through Tauri.
-- Android is supported through a mobile entry that can use a folder synchronized by Syncthing-Fork.
-- iOS is supported as a PWA/mobile-compatible entry with Möbius Sync or file import/export workflows.
-- iOS does not promise a bundled background Syncthing engine.
+- Desktop is the primary v2 platform: macOS, Windows, and Linux through Tauri with a bundled Syncthing sidecar.
+- Android targets an in-app Syncthing engine managed by an Android foreground service; Syncthing-Fork remains a compatibility/testing reference.
+- iOS may embed an adapted Syncthing engine, but only promises foreground and opportunistic background synchronization.
+- Möbius Sync or file import/export remains an iOS fallback until the in-app engine is validated.
 
 ## Non-Goals
 
@@ -36,6 +38,8 @@ s-light notes v2 is a P2P synced Markdown notes app. Notes remain ordinary `.md`
 ## Acceptance Criteria
 
 - A normal user can launch the desktop app without manually opening `index.html`.
+- A clean desktop installation can enable P2P sync without installing or opening Syncthing separately.
+- Normal sync setup does not expose API addresses, API Keys, ports, or raw Syncthing configuration.
 - The standalone v2 repository builds and tests without files from the v1 repository.
 - v1 remains usable as a separately maintained Web/PWA project.
 - Notes are still readable as Markdown files outside the app.

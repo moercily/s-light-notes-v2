@@ -209,6 +209,45 @@ async function testStartEngineInvokesDesktopCommand() {
   assert.equal(result.running, true);
 }
 
+async function testPairingUsesConstrainedDesktopCommandsWithoutApiKeys() {
+  const calls = [];
+  const service = await loadSyncService({
+    window: {
+      __TAURI__: {
+        core: {
+          invoke: async (command, payload) => {
+            calls.push({ command, payload });
+            if (command === 'syncthing_pairing_info') return { localDeviceId: 'LOCAL' };
+            if (command === 'syncthing_preview_device_pairing') {
+              return { confirmationToken: 'token' };
+            }
+            return { paired: true };
+          },
+        },
+      },
+    },
+  });
+
+  const info = await service.getPairingInfo();
+  const preview = await service.previewDevicePairing(' REMOTE-ID ', ' Laptop ');
+  const confirmed = await service.confirmDevicePairing(preview.confirmationToken);
+
+  assert.equal(info.localDeviceId, 'LOCAL');
+  assert.equal(confirmed.paired, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    { command: 'syncthing_pairing_info', payload: {} },
+    {
+      command: 'syncthing_preview_device_pairing',
+      payload: { request: { deviceId: 'REMOTE-ID', deviceName: 'Laptop' } },
+    },
+    {
+      command: 'syncthing_confirm_device_pairing',
+      payload: { request: { confirmationToken: 'token' } },
+    },
+  ]);
+  assert.ok(calls.every(call => !JSON.stringify(call).includes('apiKey')));
+}
+
 async function testReportsMissingBackendClearly() {
   const service = await loadSyncService();
 
@@ -224,6 +263,7 @@ await testDesktopConnectionReturnsUiCompatibleShape();
 await testDesktopConnectionReportsApiKeyFailure();
 await testDesktopConfigAssistAndFolderPreviewUseWrappedRequests();
 await testStartEngineInvokesDesktopCommand();
+await testPairingUsesConstrainedDesktopCommandsWithoutApiKeys();
 await testReportsMissingBackendClearly();
 
 console.log('sync-service tests passed');

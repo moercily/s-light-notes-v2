@@ -20,6 +20,8 @@ const AppState = {
     _theme: null,               // 'light' | 'dark' | null（null=跟随系统）
     sync: null,                 // Syncthing 同步状态
     desktopPaths: null,         // v2 桌面端默认目录信息
+    pairingInfo: null,          // 内置同步引擎的设备配对状态
+    pairingPreview: null,       // 等待用户二次确认的配对摘要
 };
 
 // ========== 初始化 ==========
@@ -132,6 +134,9 @@ function bindEvents() {
     $('#sync-open-confirm-binding').addEventListener('click', openSyncBindingConfirmation);
     $('#sync-binding-confirm-cancel').addEventListener('click', closeSyncBindingConfirmation);
     $('#sync-binding-confirm-apply').addEventListener('click', onSyncConfirmBinding);
+    $('#sync-copy-device-id').addEventListener('click', onCopyLocalDeviceId);
+    $('#sync-preview-pairing').addEventListener('click', onPreviewDevicePairing);
+    $('#sync-confirm-pairing').addEventListener('click', onConfirmDevicePairing);
     $('#sync-remember-key').addEventListener('change', updateSyncKeyWarning);
     $('#sync-dialog').addEventListener('click', (e) => {
         if (e.target === $('#sync-dialog')) closeSyncDialog();
@@ -255,6 +260,8 @@ function openSyncDialog() {
     $('#sync-test-result').className = 'sync-test-result';
     renderSyncReadOnlyPanel();
     renderSyncCenterCards();
+    renderSyncConnectionMode();
+    renderPairingPanel();
     refreshSyncEngineStatus();
     refreshDesktopPaths();
     updateSyncKeyWarning();
@@ -391,6 +398,7 @@ async function onSyncStartEngine() {
     }
 
     renderSyncCenterCards();
+    renderSyncConnectionMode();
     updateSyncStatusUI();
 }
 
@@ -571,6 +579,11 @@ function renderSyncReadOnlyPanel() {
     });
 
     folderSummary.textContent = syncGetFolderSummary();
+    if (AppState.syncDesktopStatus && AppState.syncDesktopStatus.engineKind === 'sidecar') {
+        folderSummary.textContent = AppState.sync.folderId
+            ? '笔记文件夹：已加入 P2P 同步'
+            : '笔记文件夹：正在准备同步';
+    }
     summary.textContent = syncGetDeviceSummary();
     completionSummary.textContent = syncGetCompletionSummary();
     configAssistSummary.textContent = syncGetConfigAssistSummary();
@@ -617,8 +630,10 @@ function renderSyncBindingControls() {
     if (!panel || !summary || !folderIdInput || !devicesContainer || !previewButton) return;
 
     const desktopMode = !!(window.desktopService && window.desktopService.isAvailable());
-    panel.classList.toggle('hidden', !desktopMode);
-    if (!desktopMode) return;
+    const sidecarMode = desktopMode && AppState.syncDesktopStatus &&
+        AppState.syncDesktopStatus.engineKind === 'sidecar';
+    panel.classList.toggle('hidden', !desktopMode || sidecarMode);
+    if (!desktopMode || sidecarMode) return;
 
     const notesPath = AppState.desktopPaths && AppState.desktopPaths.notesDir;
     const connected = !!(AppState.sync && AppState.sync.connected);
@@ -830,6 +845,207 @@ async function refreshSyncEngineStatus() {
         };
     }
     renderSyncCenterCards();
+    renderSyncConnectionMode();
+    if (AppState.syncDesktopStatus && AppState.syncDesktopStatus.running &&
+        AppState.syncDesktopStatus.engineKind === 'sidecar') {
+        const connection = await syncService.testConnection({
+            apiKey: '',
+            rememberKey: false,
+            folderId: 's-light-notes',
+        });
+        applySyncConnectionResult(connection, {
+            apiBase: AppState.syncDesktopStatus.apiBase,
+            apiKey: '',
+            rememberKey: false,
+        });
+        renderSyncReadOnlyPanel();
+        renderSyncCenterCards();
+        await refreshPairingInfo();
+    }
+}
+
+function renderSyncConnectionMode() {
+    const advanced = $('#sync-advanced-connection');
+    const openWebButton = $('#sync-open-web');
+    const bindingPanel = $('#sync-binding-panel');
+    const configAssistButton = $('#sync-load-config-assist');
+    const configAssistSummary = $('#sync-config-assist-summary');
+    const folderField = $('#sync-folder-field');
+    const testButton = $('#sync-test-connection');
+    if (!advanced || !openWebButton) return;
+
+    const desktopMode = !!(window.desktopService && window.desktopService.isAvailable());
+    const sidecarMode = desktopMode && AppState.syncDesktopStatus &&
+        AppState.syncDesktopStatus.engineKind === 'sidecar';
+    advanced.classList.toggle('hidden', desktopMode && (!AppState.syncDesktopStatus || sidecarMode));
+    openWebButton.style.display = sidecarMode ? 'none' : '';
+    if (bindingPanel) bindingPanel.classList.toggle('hidden', sidecarMode);
+    if (configAssistButton) configAssistButton.style.display = sidecarMode ? 'none' : '';
+    if (configAssistSummary) configAssistSummary.style.display = sidecarMode ? 'none' : '';
+    if (folderField) folderField.style.display = sidecarMode ? 'none' : '';
+    if (testButton) testButton.style.display = sidecarMode ? 'none' : '';
+    const startButton = $('#sync-start-engine');
+    if (startButton) {
+        const healthyOrStarting = AppState.syncDesktopStatus &&
+            (AppState.syncDesktopStatus.running || AppState.syncDesktopStatus.managed);
+        startButton.style.display = sidecarMode && healthyOrStarting ? 'none' : '';
+        startButton.textContent = sidecarMode ? '重试启动同步引擎' : '启动同步引擎';
+    }
+
+    if (sidecarMode) {
+        $('#sync-api-key').value = '';
+        $('#sync-remember-key').checked = false;
+        AppState.sync.apiKey = null;
+        AppState.sync.rememberKey = false;
+        syncPersistSettings({ skipKey: true });
+    }
+    renderPairingPanel();
+}
+
+async function refreshPairingInfo() {
+    try {
+        AppState.pairingInfo = await syncService.getPairingInfo();
+    } catch (err) {
+        AppState.pairingInfo = null;
+        const result = $('#sync-pairing-result');
+        if (result) {
+            result.className = 'sync-test-result error';
+            result.textContent = err.message || '无法读取设备配对信息。';
+        }
+    }
+    renderPairingPanel();
+}
+
+function renderPairingPanel() {
+    const panel = $('#sync-pairing-panel');
+    const localId = $('#sync-local-device-id');
+    const devicesContainer = $('#sync-paired-devices');
+    if (!panel || !localId || !devicesContainer) return;
+
+    const status = AppState.syncDesktopStatus;
+    const sidecarMode = status && status.engineKind === 'sidecar';
+    panel.classList.toggle('hidden', !(sidecarMode && status.running));
+    if (!sidecarMode || !status.running) return;
+
+    const info = AppState.pairingInfo;
+    localId.textContent = info && info.localDeviceId
+        ? info.localDeviceId
+        : '正在读取本机设备代码...';
+    devicesContainer.innerHTML = '';
+    if (!info || !Array.isArray(info.devices)) return;
+
+    const connections = info.connections && info.connections.connections
+        ? info.connections.connections
+        : {};
+    const remoteDevices = info.devices.filter(device =>
+        device && device.deviceID && device.deviceID !== info.localDeviceId
+    );
+    if (!remoteDevices.length) {
+        const empty = document.createElement('span');
+        empty.className = 'sync-device-empty';
+        empty.textContent = '尚未添加其他设备';
+        devicesContainer.appendChild(empty);
+        return;
+    }
+
+    remoteDevices.forEach(device => {
+        const row = document.createElement('div');
+        row.className = 'sync-paired-device';
+        const label = document.createElement('span');
+        label.textContent = (device.name || '未命名设备') + ' · ' + device.deviceID;
+        const state = document.createElement('span');
+        state.className = 'sync-paired-device-state';
+        state.textContent = connections[device.deviceID] && connections[device.deviceID].connected
+            ? '已连接'
+            : '等待对方确认';
+        row.appendChild(label);
+        row.appendChild(state);
+        devicesContainer.appendChild(row);
+    });
+}
+
+async function onCopyLocalDeviceId() {
+    const id = AppState.pairingInfo && AppState.pairingInfo.localDeviceId;
+    const result = $('#sync-pairing-result');
+    if (!id) return;
+    try {
+        await navigator.clipboard.writeText(id);
+        result.className = 'sync-test-result success';
+        result.textContent = '本机设备代码已复制。';
+    } catch (err) {
+        result.className = 'sync-test-result error';
+        result.textContent = '复制失败，请手动选中设备代码。';
+    }
+}
+
+function renderPairingPreview(preview) {
+    const container = $('#sync-pairing-preview');
+    const confirmButton = $('#sync-confirm-pairing');
+    if (!container || !confirmButton) return;
+    container.innerHTML = '';
+    container.classList.remove('error');
+    container.classList.toggle('hidden', !preview);
+    confirmButton.classList.toggle('hidden', !(preview && preview.confirmationToken));
+    if (!preview) return;
+
+    const title = document.createElement('strong');
+    title.textContent = '确认配对信息';
+    container.appendChild(title);
+    [
+        '设备：' + preview.deviceName,
+        '设备代码：' + preview.remoteDeviceId,
+        '共享内容：默认笔记文件夹',
+        preview.message,
+    ].forEach(value => {
+        const line = document.createElement('span');
+        line.textContent = value;
+        container.appendChild(line);
+    });
+}
+
+async function onPreviewDevicePairing() {
+    const result = $('#sync-pairing-result');
+    result.className = 'sync-test-result';
+    result.textContent = '正在检查设备代码...';
+    try {
+        AppState.pairingPreview = await syncService.previewDevicePairing(
+            $('#sync-pair-device-id').value,
+            $('#sync-pair-device-name').value
+        );
+        renderPairingPreview(AppState.pairingPreview);
+        result.className = 'sync-test-result success';
+        result.textContent = '设备代码有效。请核对摘要后再次确认。';
+    } catch (err) {
+        AppState.pairingPreview = null;
+        renderPairingPreview(null);
+        result.className = 'sync-test-result error';
+        result.textContent = err.message || '设备代码检查失败。';
+    }
+}
+
+async function onConfirmDevicePairing() {
+    const preview = AppState.pairingPreview;
+    const button = $('#sync-confirm-pairing');
+    const result = $('#sync-pairing-result');
+    if (!preview || !preview.confirmationToken) return;
+    button.disabled = true;
+    result.className = 'sync-test-result';
+    result.textContent = '正在添加设备并共享默认笔记文件夹...';
+    try {
+        const applied = await syncService.confirmDevicePairing(preview.confirmationToken);
+        AppState.pairingPreview = null;
+        renderPairingPreview(null);
+        $('#sync-pair-device-id').value = '';
+        result.className = 'sync-test-result success';
+        result.textContent = applied.message;
+        await refreshPairingInfo();
+        if (AppState.sync.connected) await onSyncRefreshStatus();
+    } catch (err) {
+        result.className = 'sync-test-result error';
+        result.textContent = err.message || '设备配对失败。';
+    } finally {
+        button.disabled = false;
+    }
 }
 
 function renderSyncCenterCards() {

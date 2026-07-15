@@ -1,23 +1,49 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
+use std::ffi::OsString;
 use std::fs;
+use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
+use tauri_plugin_shell::ShellExt;
 
 const DEFAULT_SYNCTHING_URL: &str = "http://127.0.0.1:8384";
+const SIDECAR_SYNCTHING_URL: &str = "http://127.0.0.1:8385";
+const SIDECAR_SOCKET: &str = "127.0.0.1:8385";
+const SIDECAR_BINARY_NAME: &str = "syncthing-sidecar";
+const SIDECAR_FOLDER_ID: &str = "s-light-notes";
+const SIDECAR_SYNC_PORT: u16 = 22001;
+const SIDECAR_DISCOVERY_PORT: u16 = 21028;
 const CONFIG_CONFIRMATION_TTL: Duration = Duration::from_secs(300);
-const SYNCTHING_STARTUP_ATTEMPTS: usize = 30;
+const SYNCTHING_STARTUP_ATTEMPTS: usize = 40;
 const SYNCTHING_STARTUP_INTERVAL: Duration = Duration::from_millis(250);
 static CONFIG_TOKEN_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
 struct SyncthingProcess {
     child: Mutex<Option<Child>>,
+}
+
+#[derive(Default)]
+struct SyncthingSidecar {
+    child: Mutex<Option<CommandChild>>,
+    runtime: Mutex<Option<SidecarRuntimeConfig>>,
+    last_exit: Mutex<Option<Option<i32>>>,
+    start_lock: Mutex<()>,
+}
+
+#[derive(Debug, Clone)]
+struct SidecarRuntimeConfig {
+    config_dir: PathBuf,
+    data_dir: PathBuf,
+    log_file: PathBuf,
+    api_key: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -32,11 +58,23 @@ struct PendingFolderConfigs {
     items: Mutex<HashMap<String, PendingFolderConfig>>,
 }
 
+#[derive(Default)]
+struct PendingDevicePairings {
+    items: Mutex<HashMap<String, PendingDevicePairing>>,
+}
+
 #[derive(Debug, Clone)]
 struct PendingFolderConfig {
     folder_id: String,
     path: String,
     device_ids: Vec<String>,
+    created_at: Instant,
+}
+
+#[derive(Debug, Clone)]
+struct PendingDevicePairing {
+    device_id: String,
+    device_name: String,
     created_at: Instant,
 }
 
@@ -53,6 +91,7 @@ struct SyncthingStatus {
     available: bool,
     running: bool,
     managed: bool,
+    engine_kind: String,
     api_base: String,
     executable: Option<String>,
     message: String,
@@ -95,6 +134,19 @@ struct FolderConfigRequest {
 struct ConfirmFolderConfigRequest {
     confirmation_token: String,
     api_key: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DevicePairingPreviewRequest {
+    device_id: String,
+    device_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfirmDevicePairingRequest {
+    confirmation_token: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -207,12 +259,13 @@ fn desktop_delete_note(app: AppHandle, request: NoteTargetRequest) -> Result<(),
     permanently_delete_note(&notes_dir, &request.id)
 }
 
-fn syncthing_status_snapshot(managed: bool) -> SyncthingStatus {
+fn external_syncthing_status_snapshot(managed: bool) -> SyncthingStatus {
     match syncthing_health() {
         Ok(message) => SyncthingStatus {
             available: true,
             running: true,
             managed,
+            engine_kind: "external".to_string(),
             api_base: DEFAULT_SYNCTHING_URL.to_string(),
             executable: find_syncthing_executable()
                 .ok()
@@ -225,6 +278,7 @@ fn syncthing_status_snapshot(managed: bool) -> SyncthingStatus {
                 available: true,
                 running: false,
                 managed,
+                engine_kind: "external".to_string(),
                 api_base: DEFAULT_SYNCTHING_URL.to_string(),
                 executable: Some(path.to_string_lossy().to_string()),
                 message: if managed {
@@ -237,6 +291,7 @@ fn syncthing_status_snapshot(managed: bool) -> SyncthingStatus {
                 available: false,
                 running: false,
                 managed: false,
+                engine_kind: "external".to_string(),
                 api_base: DEFAULT_SYNCTHING_URL.to_string(),
                 executable: None,
                 message: "未找到 Syncthing。请先安装，或设置 SLIGHT_SYNCTHING_BIN。".to_string(),
@@ -245,6 +300,7 @@ fn syncthing_status_snapshot(managed: bool) -> SyncthingStatus {
                 available: false,
                 running: false,
                 managed: false,
+                engine_kind: "external".to_string(),
                 api_base: DEFAULT_SYNCTHING_URL.to_string(),
                 executable: None,
                 message: format!("{discovery_error} {health_error}"),
@@ -281,71 +337,493 @@ fn format_managed_exit(code: Option<i32>) -> String {
     }
 }
 
+fn use_external_override() -> bool {
+    env::var_os("SLIGHT_SYNCTHING_BIN").is_some_and(|value| !value.is_empty())
+}
+
+fn ensure_runtime_directory(path: &Path) -> Result<(), String> {
+    fs::create_dir_all(path)
+        .map_err(|err| format!("无法创建 Syncthing 应用目录 {}：{err}", path.display()))?;
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|err| format!("无法检查 Syncthing 应用目录 {}：{err}", path.display()))?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(format!("Syncthing 应用目录不可用：{}", path.display()));
+    }
+    Ok(())
+}
+
+fn valid_managed_api_key(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn write_private_file(path: &Path, content: &str) -> Result<(), String> {
+    let temporary = path.with_extension("tmp");
+    fs::write(&temporary, content).map_err(|err| format!("无法保存 Syncthing 本机凭据：{err}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&temporary, fs::Permissions::from_mode(0o600))
+            .map_err(|err| format!("无法限制 Syncthing 本机凭据权限：{err}"))?;
+    }
+    fs::rename(&temporary, path).map_err(|err| format!("无法启用 Syncthing 本机凭据：{err}"))
+}
+
+fn load_or_create_api_key(runtime_dir: &Path) -> Result<String, String> {
+    let path = runtime_dir.join("api-key");
+    if path.exists() {
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|err| format!("无法检查 Syncthing 本机凭据：{err}"))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("Syncthing 本机凭据路径不是普通文件。".to_string());
+        }
+        let key = fs::read_to_string(&path)
+            .map_err(|err| format!("无法读取 Syncthing 本机凭据：{err}"))?;
+        let key = key.trim().to_string();
+        if valid_managed_api_key(&key) {
+            return Ok(key);
+        }
+        return Err(
+            "Syncthing 本机凭据已损坏。请删除应用数据中的 syncthing/runtime/api-key 后重试。"
+                .to_string(),
+        );
+    }
+
+    let mut bytes = [0_u8; 32];
+    getrandom::fill(&mut bytes).map_err(|err| format!("无法生成 Syncthing 本机凭据：{err}"))?;
+    let key = bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    write_private_file(&path, &key)?;
+    Ok(key)
+}
+
+fn build_sidecar_runtime(app: &AppHandle) -> Result<SidecarRuntimeConfig, String> {
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|err| format!("无法获取应用数据目录：{err}"))?
+        .join("syncthing");
+    let config_dir = root.join("config");
+    let data_dir = root.join("data");
+    let log_dir = root.join("logs");
+    let runtime_dir = root.join("runtime");
+    for directory in [&config_dir, &data_dir, &log_dir, &runtime_dir] {
+        ensure_runtime_directory(directory)?;
+    }
+    let api_key = load_or_create_api_key(&runtime_dir)?;
+    Ok(SidecarRuntimeConfig {
+        config_dir,
+        data_dir,
+        log_file: log_dir.join("syncthing.log"),
+        api_key,
+    })
+}
+
+fn sidecar_runtime(
+    app: &AppHandle,
+    state: &SyncthingSidecar,
+) -> Result<SidecarRuntimeConfig, String> {
+    let mut guard = state
+        .runtime
+        .lock()
+        .map_err(|_| "无法读取 Syncthing sidecar 配置。".to_string())?;
+    if let Some(runtime) = guard.clone() {
+        return Ok(runtime);
+    }
+    let runtime = build_sidecar_runtime(app)?;
+    *guard = Some(runtime.clone());
+    Ok(runtime)
+}
+
+fn build_sidecar_args(runtime: &SidecarRuntimeConfig) -> Vec<OsString> {
+    vec![
+        "serve".into(),
+        "--config".into(),
+        runtime.config_dir.as_os_str().to_owned(),
+        "--data".into(),
+        runtime.data_dir.as_os_str().to_owned(),
+        "--gui-address".into(),
+        SIDECAR_SOCKET.into(),
+        "--log-file".into(),
+        runtime.log_file.as_os_str().to_owned(),
+        "--log-max-old-files=3".into(),
+        "--log-max-size=1048576".into(),
+        "--no-browser".into(),
+        "--no-restart".into(),
+        "--no-upgrade".into(),
+    ]
+}
+
+fn sidecar_process_is_tracked(state: &SyncthingSidecar) -> bool {
+    state
+        .child
+        .lock()
+        .map(|child| child.is_some())
+        .unwrap_or(false)
+}
+
+fn sidecar_authenticated(runtime: &SidecarRuntimeConfig) -> bool {
+    execute_syncthing_request_at(
+        SIDECAR_SYNCTHING_URL,
+        "GET",
+        "/rest/system/status",
+        None,
+        Some(&runtime.api_key),
+    )
+    .map(|response| (200..300).contains(&response.status))
+    .unwrap_or(false)
+}
+
+fn sidecar_port_is_occupied() -> bool {
+    let address: SocketAddr = SIDECAR_SOCKET.parse().expect("valid sidecar socket");
+    TcpStream::connect_timeout(&address, Duration::from_millis(150)).is_ok()
+}
+
+fn sidecar_status_snapshot(
+    runtime: &SidecarRuntimeConfig,
+    state: &SyncthingSidecar,
+) -> SyncthingStatus {
+    let running = sidecar_authenticated(runtime);
+    let managed = running || sidecar_process_is_tracked(state);
+    let last_exit = state.last_exit.lock().ok().and_then(|value| *value);
+    let message = if running {
+        "内置 P2P 同步引擎运行正常。".to_string()
+    } else if managed {
+        "内置 P2P 同步引擎正在启动。".to_string()
+    } else if let Some(code) = last_exit {
+        format_managed_exit(code)
+    } else {
+        "内置 P2P 同步引擎尚未启动。".to_string()
+    };
+    SyncthingStatus {
+        available: true,
+        running,
+        managed,
+        engine_kind: "sidecar".to_string(),
+        api_base: SIDECAR_SYNCTHING_URL.to_string(),
+        executable: None,
+        message,
+    }
+}
+
 #[tauri::command]
-fn syncthing_status(state: State<'_, SyncthingProcess>) -> SyncthingStatus {
-    match inspect_managed_process(&state) {
-        Ok(ManagedProcessInspection::Running) => syncthing_status_snapshot(true),
+fn syncthing_status(
+    app: AppHandle,
+    external: State<'_, SyncthingProcess>,
+    sidecar: State<'_, SyncthingSidecar>,
+) -> SyncthingStatus {
+    if !use_external_override() {
+        return match sidecar_runtime(&app, &sidecar) {
+            Ok(runtime) => sidecar_status_snapshot(&runtime, &sidecar),
+            Err(message) => SyncthingStatus {
+                available: false,
+                running: false,
+                managed: false,
+                engine_kind: "sidecar".to_string(),
+                api_base: SIDECAR_SYNCTHING_URL.to_string(),
+                executable: None,
+                message,
+            },
+        };
+    }
+
+    match inspect_managed_process(&external) {
+        Ok(ManagedProcessInspection::Running) => external_syncthing_status_snapshot(true),
         Ok(ManagedProcessInspection::Exited(code)) => {
-            let mut status = syncthing_status_snapshot(false);
+            let mut status = external_syncthing_status_snapshot(false);
             if !status.running {
                 status.message = format_managed_exit(code);
             }
             status
         }
-        Ok(ManagedProcessInspection::NotManaged) => syncthing_status_snapshot(false),
+        Ok(ManagedProcessInspection::NotManaged) => external_syncthing_status_snapshot(false),
         Err(err) => {
-            let mut status = syncthing_status_snapshot(false);
+            let mut status = external_syncthing_status_snapshot(false);
             status.message = err;
             status
         }
     }
 }
 
-#[tauri::command]
-fn syncthing_start(state: State<'_, SyncthingProcess>) -> Result<SyncthingStatus, String> {
+fn start_external_syncthing(state: &SyncthingProcess) -> Result<SyncthingStatus, String> {
     let already_managed = matches!(
-        inspect_managed_process(&state)?,
+        inspect_managed_process(state)?,
         ManagedProcessInspection::Running
     );
     if syncthing_health().is_ok() {
-        return Ok(syncthing_status_snapshot(already_managed));
+        return Ok(external_syncthing_status_snapshot(already_managed));
     }
-
-    let executable = find_syncthing_executable()?.ok_or_else(|| {
-        "无法启动 Syncthing。请先安装，或设置 SLIGHT_SYNCTHING_BIN 指向可执行文件。".to_string()
-    })?;
+    let executable = find_syncthing_executable()?
+        .ok_or_else(|| "SLIGHT_SYNCTHING_BIN 指向的 Syncthing 可执行文件不存在。".to_string())?;
     let child = Command::new(&executable)
-        .arg("--no-browser")
+        .args(["serve", "--no-browser", "--no-restart", "--no-upgrade"])
         .spawn()
         .map_err(|err| format!("无法启动 Syncthing {}：{err}", executable.display()))?;
-
-    let mut guard = state
+    *state
         .child
         .lock()
-        .map_err(|_| "无法记录 Syncthing 进程状态。".to_string())?;
-    *guard = Some(child);
+        .map_err(|_| "无法记录 Syncthing 进程状态。".to_string())? = Some(child);
 
     for _ in 0..SYNCTHING_STARTUP_ATTEMPTS {
         if syncthing_health_with_timeout(SYNCTHING_STARTUP_INTERVAL).is_ok() {
-            return Ok(syncthing_status_snapshot(true));
+            return Ok(external_syncthing_status_snapshot(true));
         }
-        match inspect_managed_process(&state)? {
-            ManagedProcessInspection::Running => {
-                std::thread::sleep(SYNCTHING_STARTUP_INTERVAL);
-            }
+        match inspect_managed_process(state)? {
+            ManagedProcessInspection::Running => std::thread::sleep(SYNCTHING_STARTUP_INTERVAL),
             ManagedProcessInspection::Exited(code) => return Err(format_managed_exit(code)),
             ManagedProcessInspection::NotManaged => {
                 return Err("Syncthing 启动进程状态丢失，请重新尝试。".to_string());
             }
         }
     }
+    Ok(external_syncthing_status_snapshot(true))
+}
 
-    Ok(syncthing_status_snapshot(true))
+fn ensure_sidecar_notes_folder(
+    app: &AppHandle,
+    runtime: &SidecarRuntimeConfig,
+) -> Result<(), String> {
+    let notes_dir = default_notes_dir(app)?;
+    ensure_directory(&notes_dir)?;
+    let expected_path = canonical_existing_path(&notes_dir)?;
+    let folders = request_syncthing_json_at(
+        SIDECAR_SYNCTHING_URL,
+        "GET",
+        "/rest/config/folders",
+        None,
+        &runtime.api_key,
+        "检查内置同步文件夹",
+    )?;
+    let folder_list = folders
+        .as_array()
+        .ok_or_else(|| "Syncthing folder 配置格式无效。".to_string())?;
+    if folder_list
+        .iter()
+        .any(|folder| folder_path_matches(folder, &expected_path))
+    {
+        return Ok(());
+    }
+    if folder_list
+        .iter()
+        .any(|folder| folder["id"].as_str() == Some(SIDECAR_FOLDER_ID))
+    {
+        return Err("内置同步文件夹 ID 已指向其他目录。请在同步中心修复配置后重试。".to_string());
+    }
+    let config = PendingFolderConfig {
+        folder_id: SIDECAR_FOLDER_ID.to_string(),
+        path: expected_path.to_string_lossy().to_string(),
+        device_ids: Vec::new(),
+        created_at: Instant::now(),
+    };
+    apply_new_folder_config_at(SIDECAR_SYNCTHING_URL, &config, &runtime.api_key)?;
+    Ok(())
+}
+
+fn configure_sidecar_options(mut options: serde_json::Value) -> Result<serde_json::Value, String> {
+    let object = options
+        .as_object_mut()
+        .ok_or_else(|| "Syncthing options 配置格式无效。".to_string())?;
+    object.insert(
+        "listenAddresses".to_string(),
+        serde_json::json!([
+            format!("tcp://0.0.0.0:{SIDECAR_SYNC_PORT}"),
+            format!("quic://0.0.0.0:{SIDECAR_SYNC_PORT}")
+        ]),
+    );
+    object.insert(
+        "localAnnouncePort".to_string(),
+        serde_json::json!(SIDECAR_DISCOVERY_PORT),
+    );
+    object.insert(
+        "localAnnounceMCAddr".to_string(),
+        serde_json::json!(format!("[ff12::8384]:{SIDECAR_DISCOVERY_PORT}")),
+    );
+    object.insert("startBrowser".to_string(), serde_json::json!(false));
+    object.insert("autoUpgradeIntervalH".to_string(), serde_json::json!(0));
+    Ok(options)
+}
+
+fn sidecar_options_match(options: &serde_json::Value) -> bool {
+    options["listenAddresses"]
+        == serde_json::json!([
+            format!("tcp://0.0.0.0:{SIDECAR_SYNC_PORT}"),
+            format!("quic://0.0.0.0:{SIDECAR_SYNC_PORT}")
+        ])
+        && options["localAnnouncePort"] == serde_json::json!(SIDECAR_DISCOVERY_PORT)
+        && options["startBrowser"] == serde_json::json!(false)
+        && options["autoUpgradeIntervalH"] == serde_json::json!(0)
+}
+
+fn ensure_sidecar_options(runtime: &SidecarRuntimeConfig) -> Result<(), String> {
+    let current = request_syncthing_json_at(
+        SIDECAR_SYNCTHING_URL,
+        "GET",
+        "/rest/config/options",
+        None,
+        &runtime.api_key,
+        "读取内置同步引擎端口配置",
+    )?;
+    if sidecar_options_match(&current) {
+        return Ok(());
+    }
+    let desired = configure_sidecar_options(current)?;
+    let body = serde_json::to_string(&desired)
+        .map_err(|err| format!("无法生成内置同步引擎端口配置：{err}"))?;
+    ensure_syncthing_success(
+        execute_syncthing_request_at(
+            SIDECAR_SYNCTHING_URL,
+            "PUT",
+            "/rest/config/options",
+            Some(&body),
+            Some(&runtime.api_key),
+        )?,
+        "写入内置同步引擎端口配置",
+    )?;
+    let verified = request_syncthing_json_at(
+        SIDECAR_SYNCTHING_URL,
+        "GET",
+        "/rest/config/options",
+        None,
+        &runtime.api_key,
+        "验证内置同步引擎端口配置",
+    )?;
+    if !sidecar_options_match(&verified) {
+        return Err("内置同步引擎端口配置回读不一致，请检查 Syncthing 日志。".to_string());
+    }
+    Ok(())
+}
+
+fn spawn_sidecar(
+    app: &AppHandle,
+    state: &SyncthingSidecar,
+    runtime: &SidecarRuntimeConfig,
+) -> Result<(), String> {
+    let command = app
+        .shell()
+        .sidecar(SIDECAR_BINARY_NAME)
+        .map_err(|err| format!("安装包中的 Syncthing sidecar 不可用：{err}"))?
+        .args(build_sidecar_args(runtime))
+        .env("STGUIAPIKEY", &runtime.api_key)
+        .env("STNODEFAULTFOLDER", "true")
+        .env("STVERSIONEXTRA", "s-light-notes-v2");
+    let (mut receiver, child) = command
+        .spawn()
+        .map_err(|err| format!("无法启动安装包中的 Syncthing sidecar：{err}"))?;
+    let child_pid = child.pid();
+    *state
+        .child
+        .lock()
+        .map_err(|_| "无法记录 Syncthing sidecar 进程。".to_string())? = Some(child);
+    *state
+        .last_exit
+        .lock()
+        .map_err(|_| "无法清理 Syncthing sidecar 退出状态。".to_string())? = None;
+
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = receiver.recv().await {
+            match event {
+                CommandEvent::Terminated(payload) => {
+                    let state = app_handle.state::<SyncthingSidecar>();
+                    if let Ok(mut child) = state.child.lock() {
+                        if child
+                            .as_ref()
+                            .is_some_and(|tracked| tracked.pid() == child_pid)
+                        {
+                            child.take();
+                        }
+                    }
+                    if let Ok(mut last_exit) = state.last_exit.lock() {
+                        *last_exit = Some(payload.code);
+                    }
+                    break;
+                }
+                CommandEvent::Stderr(line) => {
+                    eprintln!("Syncthing sidecar: {}", String::from_utf8_lossy(&line));
+                }
+                _ => {}
+            }
+        }
+    });
+    Ok(())
+}
+
+fn start_syncthing_engine(
+    app: &AppHandle,
+    external: &SyncthingProcess,
+    sidecar: &SyncthingSidecar,
+) -> Result<SyncthingStatus, String> {
+    if use_external_override() {
+        return start_external_syncthing(external);
+    }
+    let _start_guard = sidecar
+        .start_lock
+        .lock()
+        .map_err(|_| "无法锁定 Syncthing sidecar 启动流程。".to_string())?;
+    let runtime = sidecar_runtime(app, sidecar)?;
+    if sidecar_authenticated(&runtime) {
+        ensure_sidecar_options(&runtime)?;
+        ensure_sidecar_notes_folder(app, &runtime)?;
+        return Ok(sidecar_status_snapshot(&runtime, sidecar));
+    }
+    if sidecar_port_is_occupied() {
+        return Err("内置同步端口 8385 已被其他程序占用。请关闭占用程序后重试；系统 Syncthing 可继续使用默认 8384 端口。".to_string());
+    }
+    if !sidecar_process_is_tracked(sidecar) {
+        spawn_sidecar(app, sidecar, &runtime)?;
+    }
+    for _ in 0..SYNCTHING_STARTUP_ATTEMPTS {
+        if sidecar_authenticated(&runtime) {
+            ensure_sidecar_options(&runtime)?;
+            ensure_sidecar_notes_folder(app, &runtime)?;
+            return Ok(sidecar_status_snapshot(&runtime, sidecar));
+        }
+        if !sidecar_process_is_tracked(sidecar) {
+            let code = sidecar
+                .last_exit
+                .lock()
+                .ok()
+                .and_then(|value| *value)
+                .flatten();
+            return Err(format_managed_exit(code));
+        }
+        std::thread::sleep(SYNCTHING_STARTUP_INTERVAL);
+    }
+    Err("内置 P2P 同步引擎启动超时。日志位于应用数据目录的 syncthing/logs。".to_string())
 }
 
 #[tauri::command]
-fn syncthing_stop(state: State<'_, SyncthingProcess>) -> Result<SyncthingStatus, String> {
-    let mut guard = state
+fn syncthing_start(
+    app: AppHandle,
+    external: State<'_, SyncthingProcess>,
+    sidecar: State<'_, SyncthingSidecar>,
+) -> Result<SyncthingStatus, String> {
+    start_syncthing_engine(&app, &external, &sidecar)
+}
+
+#[tauri::command]
+fn syncthing_stop(
+    app: AppHandle,
+    external: State<'_, SyncthingProcess>,
+    sidecar: State<'_, SyncthingSidecar>,
+) -> Result<SyncthingStatus, String> {
+    if !use_external_override() {
+        let child = sidecar
+            .child
+            .lock()
+            .map_err(|_| "无法读取 Syncthing sidecar 进程状态。".to_string())?
+            .take();
+        if let Some(child) = child {
+            child
+                .kill()
+                .map_err(|err| format!("无法停止内置 P2P 同步引擎：{err}"))?;
+        }
+        let runtime = sidecar_runtime(&app, &sidecar)?;
+        return Ok(sidecar_status_snapshot(&runtime, &sidecar));
+    }
+
+    let mut guard = external
         .child
         .lock()
         .map_err(|_| "无法读取 Syncthing 进程状态。".to_string())?;
@@ -365,30 +843,42 @@ fn syncthing_stop(state: State<'_, SyncthingProcess>) -> Result<SyncthingStatus,
         }
     }
 
-    Ok(syncthing_status_snapshot(false))
+    Ok(external_syncthing_status_snapshot(false))
+}
+
+fn active_syncthing_target(
+    app: &AppHandle,
+    sidecar: &SyncthingSidecar,
+    supplied_api_key: Option<&str>,
+) -> Result<(String, Option<String>), String> {
+    if use_external_override() {
+        return Ok((
+            DEFAULT_SYNCTHING_URL.to_string(),
+            validate_api_key(supplied_api_key)?.map(str::to_string),
+        ));
+    }
+    let runtime = sidecar_runtime(app, sidecar)?;
+    Ok((SIDECAR_SYNCTHING_URL.to_string(), Some(runtime.api_key)))
 }
 
 #[tauri::command]
-fn syncthing_proxy_request(request: ProxyRequest) -> Result<ProxyResponse, String> {
+fn syncthing_proxy_request(
+    app: AppHandle,
+    request: ProxyRequest,
+    sidecar: State<'_, SyncthingSidecar>,
+) -> Result<ProxyResponse, String> {
     let method = request.method.to_uppercase();
     if method != "GET" && method != "POST" {
         return Err("暂不支持该 Syncthing 请求方法。".to_string());
     }
-    execute_syncthing_request(
+    let (api_base, api_key) = active_syncthing_target(&app, &sidecar, request.api_key.as_deref())?;
+    execute_syncthing_request_at(
+        &api_base,
         &method,
         &request.path,
         request.body.as_deref(),
-        request.api_key.as_deref(),
+        api_key.as_deref(),
     )
-}
-
-fn execute_syncthing_request(
-    method: &str,
-    path: &str,
-    body: Option<&str>,
-    api_key: Option<&str>,
-) -> Result<ProxyResponse, String> {
-    execute_syncthing_request_at(DEFAULT_SYNCTHING_URL, method, path, body, api_key)
 }
 
 fn execute_syncthing_request_at(
@@ -408,6 +898,12 @@ fn execute_syncthing_request_at(
     let response = match method {
         "GET" => apply_api_key(agent.get(&url), api_key).call(),
         "POST" => apply_api_key(agent.post(&url), api_key)
+            .set("Content-Type", "application/json")
+            .send_string(body.unwrap_or("")),
+        "PUT" => apply_api_key(agent.put(&url), api_key)
+            .set("Content-Type", "application/json")
+            .send_string(body.unwrap_or("")),
+        "PATCH" => apply_api_key(agent.request("PATCH", &url), api_key)
             .set("Content-Type", "application/json")
             .send_string(body.unwrap_or("")),
         "DELETE" => apply_api_key(agent.delete(&url), api_key).call(),
@@ -447,13 +943,417 @@ fn syncthing_apply_folder_config(
 
 #[tauri::command]
 fn syncthing_confirm_folder_config(
+    app: AppHandle,
     request: ConfirmFolderConfigRequest,
     pending: State<'_, PendingFolderConfigs>,
+    sidecar: State<'_, SyncthingSidecar>,
 ) -> Result<serde_json::Value, String> {
-    let api_key = validate_api_key(Some(&request.api_key))?
-        .ok_or_else(|| "确认写入前需要有效的 Syncthing API Key。".to_string())?;
     let config = take_pending_folder_config(&pending, &request.confirmation_token)?;
-    apply_new_folder_config(&config, api_key)
+    let (api_base, api_key) = active_syncthing_target(&app, &sidecar, Some(&request.api_key))?;
+    let api_key = api_key
+        .as_deref()
+        .ok_or_else(|| "确认写入前需要有效的 Syncthing API Key。".to_string())?;
+    apply_new_folder_config_at(&api_base, &config, api_key)
+}
+
+fn pairing_runtime(
+    app: &AppHandle,
+    sidecar: &SyncthingSidecar,
+) -> Result<SidecarRuntimeConfig, String> {
+    if use_external_override() {
+        return Err("设备配对向导仅适用于应用内置同步引擎。".to_string());
+    }
+    let runtime = sidecar_runtime(app, sidecar)?;
+    if !sidecar_authenticated(&runtime) {
+        return Err("内置 P2P 同步引擎尚未就绪，请稍后重试。".to_string());
+    }
+    Ok(runtime)
+}
+
+fn validate_device_name(value: &str) -> Result<String, String> {
+    let name = value.trim();
+    if name.is_empty() {
+        return Ok("另一台设备".to_string());
+    }
+    if name.chars().count() > 64 || name.chars().any(char::is_control) {
+        return Err("设备名称不能超过 64 个字符且不能包含控制字符。".to_string());
+    }
+    Ok(name.to_string())
+}
+
+fn normalize_device_id_at(
+    api_base: &str,
+    api_key: &str,
+    candidate: &str,
+) -> Result<String, String> {
+    let compact = candidate
+        .chars()
+        .filter(|character| !character.is_ascii_whitespace())
+        .collect::<String>();
+    if compact.len() < 52
+        || compact.len() > 64
+        || !compact
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
+        return Err("设备代码格式无效，请检查是否完整复制。".to_string());
+    }
+    let response = request_syncthing_json_at(
+        api_base,
+        "GET",
+        &format!("/rest/svc/deviceid?id={compact}"),
+        None,
+        api_key,
+        "校验设备代码",
+    )?;
+    if let Some(error) = response["error"].as_str() {
+        return Err(format!("设备代码无效：{error}"));
+    }
+    response["id"]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| "Syncthing 未返回有效的设备代码。".to_string())
+}
+
+fn local_device_id_at(api_base: &str, api_key: &str) -> Result<String, String> {
+    let status = request_syncthing_json_at(
+        api_base,
+        "GET",
+        "/rest/system/status",
+        None,
+        api_key,
+        "读取本机设备代码",
+    )?;
+    status["myID"]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| "Syncthing 未返回本机设备代码。".to_string())
+}
+
+fn configured_devices_at(api_base: &str, api_key: &str) -> Result<Vec<serde_json::Value>, String> {
+    request_syncthing_json_at(
+        api_base,
+        "GET",
+        "/rest/config/devices",
+        None,
+        api_key,
+        "读取已配对设备",
+    )?
+    .as_array()
+    .cloned()
+    .ok_or_else(|| "Syncthing 设备配置格式无效。".to_string())
+}
+
+fn sidecar_folder_at(api_base: &str, api_key: &str) -> Result<serde_json::Value, String> {
+    let folders = request_syncthing_json_at(
+        api_base,
+        "GET",
+        "/rest/config/folders",
+        None,
+        api_key,
+        "读取默认同步文件夹",
+    )?;
+    folders
+        .as_array()
+        .and_then(|items| {
+            items
+                .iter()
+                .find(|folder| folder["id"].as_str() == Some(SIDECAR_FOLDER_ID))
+        })
+        .cloned()
+        .ok_or_else(|| "默认笔记同步文件夹尚未准备好。".to_string())
+}
+
+fn store_pending_device_pairing(
+    pending: &PendingDevicePairings,
+    pairing: PendingDevicePairing,
+) -> Result<String, String> {
+    let mut items = pending
+        .items
+        .lock()
+        .map_err(|_| "无法保存设备配对确认信息。".to_string())?;
+    items.retain(|_, item| item.created_at.elapsed() <= CONFIG_CONFIRMATION_TTL);
+    let token = new_confirmation_token();
+    items.insert(token.clone(), pairing);
+    Ok(token)
+}
+
+fn take_pending_device_pairing(
+    pending: &PendingDevicePairings,
+    token: &str,
+) -> Result<PendingDevicePairing, String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err("缺少设备配对确认凭证，请重新检查设备代码。".to_string());
+    }
+    let mut items = pending
+        .items
+        .lock()
+        .map_err(|_| "无法读取设备配对确认信息。".to_string())?;
+    let pairing = items
+        .remove(token)
+        .ok_or_else(|| "设备配对确认已失效或已使用，请重新检查设备代码。".to_string())?;
+    if pairing.created_at.elapsed() > CONFIG_CONFIRMATION_TTL {
+        return Err("设备配对确认已超过五分钟，请重新检查设备代码。".to_string());
+    }
+    Ok(pairing)
+}
+
+fn pairing_info_at(api_base: &str, api_key: &str) -> Result<serde_json::Value, String> {
+    let local_device_id = local_device_id_at(api_base, api_key)?;
+    let devices = configured_devices_at(api_base, api_key)?;
+    let connections = request_syncthing_json_at(
+        api_base,
+        "GET",
+        "/rest/system/connections",
+        None,
+        api_key,
+        "读取设备连接状态",
+    )?;
+    let pending_devices = request_syncthing_json_at(
+        api_base,
+        "GET",
+        "/rest/cluster/pending/devices",
+        None,
+        api_key,
+        "读取待确认设备",
+    )
+    .unwrap_or_else(|_| serde_json::json!({}));
+    Ok(serde_json::json!({
+        "localDeviceId": local_device_id,
+        "folderId": SIDECAR_FOLDER_ID,
+        "devices": devices,
+        "connections": connections,
+        "pendingDevices": pending_devices
+    }))
+}
+
+#[tauri::command]
+fn syncthing_pairing_info(
+    app: AppHandle,
+    sidecar: State<'_, SyncthingSidecar>,
+) -> Result<serde_json::Value, String> {
+    let runtime = pairing_runtime(&app, &sidecar)?;
+    pairing_info_at(SIDECAR_SYNCTHING_URL, &runtime.api_key)
+}
+
+#[tauri::command]
+fn syncthing_preview_device_pairing(
+    app: AppHandle,
+    request: DevicePairingPreviewRequest,
+    sidecar: State<'_, SyncthingSidecar>,
+    pending: State<'_, PendingDevicePairings>,
+) -> Result<serde_json::Value, String> {
+    let runtime = pairing_runtime(&app, &sidecar)?;
+    let device_id =
+        normalize_device_id_at(SIDECAR_SYNCTHING_URL, &runtime.api_key, &request.device_id)?;
+    let local_device_id = local_device_id_at(SIDECAR_SYNCTHING_URL, &runtime.api_key)?;
+    if device_id == local_device_id {
+        return Err("不能把本机设备代码添加为远端设备。".to_string());
+    }
+    if configured_devices_at(SIDECAR_SYNCTHING_URL, &runtime.api_key)?
+        .iter()
+        .any(|device| device["deviceID"].as_str() == Some(&device_id))
+    {
+        return Err("这台设备已经添加，无需重复配对。".to_string());
+    }
+    let device_name = validate_device_name(&request.device_name)?;
+    let token = store_pending_device_pairing(
+        &pending,
+        PendingDevicePairing {
+            device_id: device_id.clone(),
+            device_name: device_name.clone(),
+            created_at: Instant::now(),
+        },
+    )?;
+    Ok(serde_json::json!({
+        "requiresConfirmation": true,
+        "confirmationToken": token,
+        "expiresInSeconds": CONFIG_CONFIRMATION_TTL.as_secs(),
+        "localDeviceId": local_device_id,
+        "remoteDeviceId": device_id,
+        "deviceName": device_name,
+        "folderId": SIDECAR_FOLDER_ID,
+        "message": "确认后会添加这台设备并向它共享默认笔记文件夹。另一台设备仍需输入本机设备代码并确认。"
+    }))
+}
+
+fn build_device_payload(
+    template: serde_json::Value,
+    pairing: &PendingDevicePairing,
+) -> Result<serde_json::Value, String> {
+    let mut object = template
+        .as_object()
+        .cloned()
+        .ok_or_else(|| "Syncthing 默认设备模板格式无效。".to_string())?;
+    object.insert("deviceID".to_string(), serde_json::json!(pairing.device_id));
+    object.insert("name".to_string(), serde_json::json!(pairing.device_name));
+    object.insert("addresses".to_string(), serde_json::json!(["dynamic"]));
+    object.insert("paused".to_string(), serde_json::json!(false));
+    Ok(serde_json::Value::Object(object))
+}
+
+fn rollback_device_pairing_at(
+    api_base: &str,
+    api_key: &str,
+    device_id: &str,
+    original_folder_devices: &[serde_json::Value],
+    restore_folder: bool,
+) -> Vec<String> {
+    let mut errors = Vec::new();
+    if restore_folder {
+        let body = serde_json::json!({ "devices": original_folder_devices }).to_string();
+        if let Err(err) = execute_syncthing_request_at(
+            api_base,
+            "PATCH",
+            &format!("/rest/config/folders/{SIDECAR_FOLDER_ID}"),
+            Some(&body),
+            Some(api_key),
+        )
+        .and_then(|response| ensure_syncthing_success(response, "撤销文件夹共享"))
+        {
+            errors.push(err);
+        }
+    }
+    if let Err(err) = execute_syncthing_request_at(
+        api_base,
+        "DELETE",
+        &format!("/rest/config/devices/{device_id}"),
+        None,
+        Some(api_key),
+    )
+    .and_then(|response| ensure_syncthing_success(response, "撤销远端设备"))
+    {
+        errors.push(err);
+    }
+    errors
+}
+
+fn apply_device_pairing_at(
+    api_base: &str,
+    api_key: &str,
+    pairing: &PendingDevicePairing,
+) -> Result<serde_json::Value, String> {
+    let normalized = normalize_device_id_at(api_base, api_key, &pairing.device_id)?;
+    if normalized != pairing.device_id {
+        return Err("确认前设备代码发生变化，未执行配对。".to_string());
+    }
+    if configured_devices_at(api_base, api_key)?
+        .iter()
+        .any(|device| device["deviceID"].as_str() == Some(&pairing.device_id))
+    {
+        return Err("确认前该设备已经被添加，未重复写入。".to_string());
+    }
+    let folder = sidecar_folder_at(api_base, api_key)?;
+    let original_folder_devices = folder["devices"]
+        .as_array()
+        .cloned()
+        .ok_or_else(|| "默认同步文件夹的设备列表格式无效。".to_string())?;
+    let template = request_syncthing_json_at(
+        api_base,
+        "GET",
+        "/rest/config/defaults/device",
+        None,
+        api_key,
+        "读取 Syncthing 默认设备模板",
+    )?;
+    let payload = build_device_payload(template, pairing)?;
+    let payload_text =
+        serde_json::to_string(&payload).map_err(|err| format!("无法生成远端设备配置：{err}"))?;
+    ensure_syncthing_success(
+        execute_syncthing_request_at(
+            api_base,
+            "POST",
+            "/rest/config/devices",
+            Some(&payload_text),
+            Some(api_key),
+        )?,
+        "添加远端设备",
+    )?;
+
+    let mut shared_devices = original_folder_devices.clone();
+    shared_devices.push(serde_json::json!({ "deviceID": pairing.device_id }));
+    let folder_patch = serde_json::json!({ "devices": shared_devices }).to_string();
+    let share_result = execute_syncthing_request_at(
+        api_base,
+        "PATCH",
+        &format!("/rest/config/folders/{SIDECAR_FOLDER_ID}"),
+        Some(&folder_patch),
+        Some(api_key),
+    )
+    .and_then(|response| ensure_syncthing_success(response, "共享默认笔记文件夹"));
+    if let Err(err) = share_result {
+        let rollback = rollback_device_pairing_at(
+            api_base,
+            api_key,
+            &pairing.device_id,
+            &original_folder_devices,
+            false,
+        );
+        return Err(format!(
+            "{err}{}",
+            if rollback.is_empty() {
+                " 已撤销本轮新增设备。".to_string()
+            } else {
+                format!(" 自动撤销失败：{}", rollback.join("；"))
+            }
+        ));
+    }
+
+    let verification = (|| -> Result<bool, String> {
+        let verified_device = configured_devices_at(api_base, api_key)?
+            .iter()
+            .any(|device| device["deviceID"].as_str() == Some(&pairing.device_id));
+        let verified_folder = sidecar_folder_at(api_base, api_key)?["devices"]
+            .as_array()
+            .is_some_and(|devices| {
+                devices
+                    .iter()
+                    .any(|device| device["deviceID"].as_str() == Some(&pairing.device_id))
+            });
+        Ok(verified_device && verified_folder)
+    })();
+    if verification.as_ref().ok() != Some(&true) {
+        let rollback = rollback_device_pairing_at(
+            api_base,
+            api_key,
+            &pairing.device_id,
+            &original_folder_devices,
+            true,
+        );
+        return Err(if rollback.is_empty() {
+            format!(
+                "设备配对回读验证失败，已撤销本轮配置。{}",
+                verification
+                    .err()
+                    .map(|error| format!(" {error}"))
+                    .unwrap_or_default()
+            )
+        } else {
+            format!("设备配对验证和自动撤销均失败：{}", rollback.join("；"))
+        });
+    }
+
+    Ok(serde_json::json!({
+        "paired": true,
+        "remoteDeviceId": pairing.device_id,
+        "deviceName": pairing.device_name,
+        "folderId": SIDECAR_FOLDER_ID,
+        "connectionState": "waitingForRemote",
+        "message": "本机配置已完成。请在另一台设备上输入本机设备代码并确认，双方确认后会自动连接和同步。"
+    }))
+}
+
+#[tauri::command]
+fn syncthing_confirm_device_pairing(
+    app: AppHandle,
+    request: ConfirmDevicePairingRequest,
+    sidecar: State<'_, SyncthingSidecar>,
+    pending: State<'_, PendingDevicePairings>,
+) -> Result<serde_json::Value, String> {
+    let runtime = pairing_runtime(&app, &sidecar)?;
+    let pairing = take_pending_device_pairing(&pending, &request.confirmation_token)?;
+    apply_device_pairing_at(SIDECAR_SYNCTHING_URL, &runtime.api_key, &pairing)
 }
 
 #[tauri::command]
@@ -465,6 +1365,9 @@ fn open_notes_folder(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn open_syncthing_web() -> Result<(), String> {
+    if !use_external_override() {
+        return Err("内置同步引擎由应用安全管理，不需要打开端口或高级网页。".to_string());
+    }
     opener::open(DEFAULT_SYNCTHING_URL).map_err(|err| format!("无法打开 Syncthing：{err}"))
 }
 
@@ -934,13 +1837,6 @@ fn ensure_no_folder_conflicts(
     Ok(())
 }
 
-fn apply_new_folder_config(
-    config: &PendingFolderConfig,
-    api_key: &str,
-) -> Result<serde_json::Value, String> {
-    apply_new_folder_config_at(DEFAULT_SYNCTHING_URL, config, api_key)
-}
-
 fn apply_new_folder_config_at(
     api_base: &str,
     config: &PendingFolderConfig,
@@ -1127,11 +2023,15 @@ fn find_syncthing_executable() -> Result<Option<PathBuf>, String> {
 }
 
 fn syncthing_health() -> Result<String, String> {
-    syncthing_health_with_timeout(Duration::from_secs(3))
+    syncthing_health_at(DEFAULT_SYNCTHING_URL, Duration::from_secs(3))
 }
 
 fn syncthing_health_with_timeout(timeout: Duration) -> Result<String, String> {
-    let url = format!("{DEFAULT_SYNCTHING_URL}/rest/noauth/health");
+    syncthing_health_at(DEFAULT_SYNCTHING_URL, timeout)
+}
+
+fn syncthing_health_at(api_base: &str, timeout: Duration) -> Result<String, String> {
+    let url = format!("{}/rest/noauth/health", api_base.trim_end_matches('/'));
     let response = ureq::get(&url)
         .timeout(timeout)
         .call()
@@ -1175,8 +2075,41 @@ fn apply_api_key(request: ureq::Request, api_key: Option<&str>) -> ureq::Request
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_shell::init())
         .manage(SyncthingProcess::default())
+        .manage(SyncthingSidecar::default())
         .manage(PendingFolderConfigs::default())
+        .manage(PendingDevicePairings::default())
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                let external = handle.state::<SyncthingProcess>();
+                let sidecar = handle.state::<SyncthingSidecar>();
+                if let Err(err) = start_syncthing_engine(&handle, &external, &sidecar) {
+                    eprintln!("Syncthing 自动启动失败：{err}");
+                }
+            });
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if !matches!(event, tauri::WindowEvent::Destroyed) {
+                return;
+            }
+            let app = window.app_handle();
+            let sidecar = app.state::<SyncthingSidecar>();
+            if let Ok(mut child) = sidecar.child.lock() {
+                if let Some(child) = child.take() {
+                    let _ = child.kill();
+                }
+            }
+            let external = app.state::<SyncthingProcess>();
+            if let Ok(mut child) = external.child.lock() {
+                if let Some(child) = child.as_mut() {
+                    let _ = child.kill();
+                }
+                child.take();
+            };
+        })
         .invoke_handler(tauri::generate_handler![
             get_app_paths,
             ensure_notes_folder,
@@ -1192,6 +2125,9 @@ pub fn run() {
             syncthing_proxy_request,
             syncthing_apply_folder_config,
             syncthing_confirm_folder_config,
+            syncthing_pairing_info,
+            syncthing_preview_device_pairing,
+            syncthing_confirm_device_pairing,
             open_notes_folder,
             open_syncthing_web
         ])
@@ -1376,6 +2312,74 @@ mod tests {
         (api_base, requests, handle)
     }
 
+    fn spawn_device_pairing_server(
+        remote_device_id: &'static str,
+    ) -> (String, Arc<Mutex<Vec<CapturedHttpRequest>>>, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let api_base = format!("http://{}", listener.local_addr().unwrap());
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&requests);
+        let handle = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let local_device_id = "LOCALAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH";
+            let mut devices = vec![serde_json::json!({
+                "deviceID": local_device_id,
+                "name": "Local"
+            })];
+            let mut folder_devices = vec![serde_json::json!({ "deviceID": local_device_id })];
+            while captured.lock().unwrap().len() < 8 && Instant::now() < deadline {
+                let (mut stream, _) = match listener.accept() {
+                    Ok(connection) => connection,
+                    Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                    Err(err) => panic!("mock pairing listener failed: {err}"),
+                };
+                let request = read_http_request(&mut stream);
+                let response_body = if request.method == "GET"
+                    && request.path.starts_with("/rest/svc/deviceid?id=")
+                {
+                    serde_json::json!({ "id": remote_device_id }).to_string()
+                } else {
+                    match (request.method.as_str(), request.path.as_str()) {
+                        ("GET", "/rest/config/devices") => serde_json::to_string(&devices).unwrap(),
+                        ("GET", "/rest/config/folders") => serde_json::json!([{
+                            "id": SIDECAR_FOLDER_ID,
+                            "path": "/tmp/notes",
+                            "devices": folder_devices
+                        }])
+                        .to_string(),
+                        ("GET", "/rest/config/defaults/device") => serde_json::json!({
+                            "deviceID": "",
+                            "name": "",
+                            "addresses": ["dynamic"],
+                            "paused": false
+                        })
+                        .to_string(),
+                        ("POST", "/rest/config/devices") => {
+                            devices.push(serde_json::from_str(&request.body).unwrap());
+                            "{}".to_string()
+                        }
+                        ("PATCH", path)
+                            if path == format!("/rest/config/folders/{SIDECAR_FOLDER_ID}") =>
+                        {
+                            let patch: serde_json::Value =
+                                serde_json::from_str(&request.body).unwrap();
+                            folder_devices = patch["devices"].as_array().unwrap().clone();
+                            "{}".to_string()
+                        }
+                        _ => "{}".to_string(),
+                    }
+                };
+                captured.lock().unwrap().push(request);
+                write_json_response(&mut stream, 200, &response_body);
+            }
+        });
+        (api_base, requests, handle)
+    }
+
     #[test]
     fn resolves_configured_and_path_syncthing_executables() {
         let bin_dir = temporary_notes_dir("syncthing-bin");
@@ -1454,6 +2458,131 @@ mod tests {
             format_managed_exit(Some(7)),
             "应用启动的 Syncthing 已提前退出，退出码：7。"
         );
+    }
+
+    #[test]
+    fn managed_sidecar_key_is_random_private_and_persistent() {
+        let runtime_dir = temporary_notes_dir("sidecar-key");
+        ensure_runtime_directory(&runtime_dir).unwrap();
+        let first = load_or_create_api_key(&runtime_dir).unwrap();
+        let second = load_or_create_api_key(&runtime_dir).unwrap();
+
+        assert_eq!(first, second);
+        assert!(valid_managed_api_key(&first));
+        assert_eq!(first.len(), 64);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(runtime_dir.join("api-key"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+        fs::remove_dir_all(runtime_dir).unwrap();
+    }
+
+    #[test]
+    fn sidecar_arguments_isolate_state_and_never_contain_the_api_key() {
+        let root = temporary_notes_dir("sidecar-args");
+        let runtime = SidecarRuntimeConfig {
+            config_dir: root.join("config"),
+            data_dir: root.join("data"),
+            log_file: root.join("logs").join("syncthing.log"),
+            api_key: "a".repeat(64),
+        };
+        let arguments = build_sidecar_args(&runtime)
+            .iter()
+            .map(|value| value.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        let command_line = arguments.join(" ");
+
+        assert!(arguments.contains(&"serve".to_string()));
+        assert!(arguments.contains(&"127.0.0.1:8385".to_string()));
+        assert!(arguments.contains(&"--no-browser".to_string()));
+        assert!(arguments.contains(&"--no-restart".to_string()));
+        assert!(arguments.contains(&"--no-upgrade".to_string()));
+        assert!(command_line.contains(root.join("config").to_string_lossy().as_ref()));
+        assert!(command_line.contains(root.join("data").to_string_lossy().as_ref()));
+        assert!(!command_line.contains(&runtime.api_key));
+    }
+
+    #[test]
+    fn sidecar_options_use_app_owned_sync_and_discovery_ports() {
+        let options = configure_sidecar_options(serde_json::json!({
+            "listenAddresses": ["default"],
+            "localAnnouncePort": 21027,
+            "startBrowser": true,
+            "autoUpgradeIntervalH": 12,
+            "unrelatedOption": "preserved"
+        }))
+        .unwrap();
+
+        assert!(sidecar_options_match(&options));
+        assert_eq!(
+            options["listenAddresses"],
+            serde_json::json!(["tcp://0.0.0.0:22001", "quic://0.0.0.0:22001"])
+        );
+        assert_eq!(options["localAnnouncePort"], 21028);
+        assert_eq!(options["localAnnounceMCAddr"], "[ff12::8384]:21028");
+        assert_eq!(options["unrelatedOption"], "preserved");
+    }
+
+    #[test]
+    fn device_pairing_validates_names_and_rejects_incomplete_codes() {
+        assert_eq!(validate_device_name("  Laptop  ").unwrap(), "Laptop");
+        assert_eq!(validate_device_name("   ").unwrap(), "另一台设备");
+        assert!(validate_device_name(&"x".repeat(65)).is_err());
+        assert!(normalize_device_id_at("http://127.0.0.1:1", "key", "short-code").is_err());
+    }
+
+    #[test]
+    fn device_pairing_tokens_are_single_use() {
+        let pending = PendingDevicePairings::default();
+        let token = store_pending_device_pairing(
+            &pending,
+            PendingDevicePairing {
+                device_id: "REMOTE".to_string(),
+                device_name: "Laptop".to_string(),
+                created_at: Instant::now(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            take_pending_device_pairing(&pending, &token)
+                .unwrap()
+                .device_name,
+            "Laptop"
+        );
+        assert!(take_pending_device_pairing(&pending, &token).is_err());
+    }
+
+    #[test]
+    fn device_pairing_payload_uses_safe_dynamic_defaults() {
+        let pairing = PendingDevicePairing {
+            device_id: "REMOTE-ID".to_string(),
+            device_name: "Laptop".to_string(),
+            created_at: Instant::now(),
+        };
+        let payload = build_device_payload(
+            serde_json::json!({
+                "deviceID": "",
+                "name": "",
+                "addresses": [],
+                "paused": true,
+                "compression": "metadata"
+            }),
+            &pairing,
+        )
+        .unwrap();
+
+        assert_eq!(payload["deviceID"], "REMOTE-ID");
+        assert_eq!(payload["name"], "Laptop");
+        assert_eq!(payload["addresses"], serde_json::json!(["dynamic"]));
+        assert_eq!(payload["paused"], false);
+        assert_eq!(payload["compression"], "metadata");
     }
 
     #[test]
@@ -1727,5 +2856,43 @@ mod tests {
             Some("integration-key")
         );
         fs::remove_dir_all(notes_dir).unwrap();
+    }
+
+    #[test]
+    fn device_pairing_uses_validated_device_and_folder_patch_protocol() {
+        let remote_device_id = "P56IOI7-MZJNU2Y-IQGDREY-DM2MGTI-MGL3BXN-PQ6W5BM-TBBZ4TJ-XZWICQ2";
+        let pairing = PendingDevicePairing {
+            device_id: remote_device_id.to_string(),
+            device_name: "Laptop".to_string(),
+            created_at: Instant::now(),
+        };
+        let (api_base, requests, server) = spawn_device_pairing_server(remote_device_id);
+
+        let result = apply_device_pairing_at(&api_base, "pairing-key", &pairing).unwrap();
+        server.join().unwrap();
+        let captured = requests.lock().unwrap().clone();
+
+        assert_eq!(result["paired"], true);
+        assert_eq!(result["connectionState"], "waitingForRemote");
+        assert_eq!(captured.len(), 8);
+        assert_eq!(captured[4].method, "POST");
+        assert_eq!(captured[4].path, "/rest/config/devices");
+        assert_eq!(captured[5].method, "PATCH");
+        assert_eq!(
+            captured[5].path,
+            format!("/rest/config/folders/{SIDECAR_FOLDER_ID}")
+        );
+        assert!(captured.iter().all(|request| {
+            request.headers.get("x-api-key").map(String::as_str) == Some("pairing-key")
+        }));
+        let device_payload: serde_json::Value = serde_json::from_str(&captured[4].body).unwrap();
+        assert_eq!(device_payload["deviceID"], remote_device_id);
+        assert_eq!(device_payload["name"], "Laptop");
+        let folder_patch: serde_json::Value = serde_json::from_str(&captured[5].body).unwrap();
+        assert!(folder_patch["devices"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|device| device["deviceID"].as_str() == Some(remote_device_id)));
     }
 }
