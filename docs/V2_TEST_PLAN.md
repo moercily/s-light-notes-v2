@@ -49,6 +49,32 @@
 - Confirm delete, restore, and permanent delete behave consistently with v1.
 - Confirm v1 browser entry still opens `index.html` normally.
 
+### macOS Apple Silicon Smoke Checkpoint - 2026-07-15
+
+Verified in the current environment:
+
+- The latest `.app` bundle launches from `src-tauri/target/release/bundle/macos/`.
+- With sidecar startup deliberately made unavailable in a disposable package copy, the main app remained running and logged the sidecar startup failure instead of exiting.
+- `npm test`, all 31 Rust tests, and `npm run tauri:build` passed from the independent v2 repository.
+- The v1 repository still contains only its pre-existing `css/style.css` modification; the v2 run did not change v1.
+
+Not yet accepted as passed:
+
+- macOS denied Accessibility access to `osascript`, so controls could not be clicked or typed through the automated smoke runner.
+- macOS also denied screen capture, so the absence of the browser folder-permission picker could not be independently recorded.
+- Create/edit/save/reopen, Finder visibility, external modification, trash/restore/permanent delete, and actual editing while the sidecar is unavailable still require a short manual run.
+
+Manual acceptance run:
+
+1. Open the latest `s-light notes.app` and create a note named `macOS smoke note` with a second line of body text.
+2. Quit and reopen the app; open the note and confirm both lines remain.
+3. Use **Open Notes Folder** and confirm `macOS smoke note.md` is readable in Finder or a text editor.
+4. Append `external edit` in a text editor, then reopen or refresh the app and confirm the added line appears.
+5. Delete the note, restore it from Trash, delete it again, and permanently delete it; confirm the file moves through `.trash` and is finally absent.
+6. Confirm no browser folder-permission picker appears at any point.
+
+Do not mark Phase 5.1 complete until all six steps are recorded as passed.
+
 ## Bundled Sidecar Tests
 
 macOS Apple Silicon packaged-app validation passed on 2026-07-15: the bundle contained the pinned arm64 binary, automatically started it beside an existing system Syncthing instance, used isolated ports and app data, created the default folder binding, preserved a private backend credential, and stopped the sidecar when the app closed.

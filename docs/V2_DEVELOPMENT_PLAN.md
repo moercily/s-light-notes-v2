@@ -1,123 +1,238 @@
 # s-light notes v2 Development Plan
 
-## Current v2 Baseline
+## 1. Plan Scope
 
-v2 is maintained as an independent repository. Its root contains the package metadata, tests, documentation, Tauri backend, and the frontend under `app/`. v1 remains a separate Web/PWA repository and is not required to build or test v2.
+This document is the active implementation plan for v2. The v2 repository is independent from v1 and contains its own frontend, Tauri shell, Rust backend, Syncthing sidecar metadata, tests, and release artifacts.
 
-- `package.json` introduces a v2 alpha project entry and test command.
-- `js/sync-service.js` exposes the v2 frontend sync interface.
-- `js/sync-center.js` provides the sync center view model and separates local save status from P2P sync status.
-- `js/desktop-service.js` provides the frontend bridge for Tauri app paths and default notes folder actions.
-- The Tauri desktop build now uses a dedicated `desktop` storage mode to read and write Markdown files in the default notes folder without a browser permission prompt.
-- `src-tauri/` contains the Tauri v2 desktop shell scaffold and backend command skeleton.
-- The v2 Web/PWA compatibility entry is maintained under `app/` without importing files from the v1 repository.
-- The desktop sync dialog has started moving toward a v2 sync center with status cards and a desktop engine start action.
-- The sync center can now read, create, and open the v2 default notes folder in the Tauri desktop build.
-- Desktop note listing, reading, saving, trash, restore, and permanent deletion are implemented with path validation and symlink checks.
+Status meanings:
 
-## Phase V2.1: Desktop Shell Alpha
+- `[x]` completed and verified.
+- `[ ]` planned but not completed.
+- A checklist item is not considered complete until its acceptance condition is recorded in `V2_TEST_PLAN.md`.
 
-- [x] Install Rust, Cargo, npm, and Tauri CLI dependencies.
-- [x] Run frontend tests and Rust tests.
-- [x] Build a macOS `.app` bundle from `v2/`.
-- [x] Enable the Tauri global API required by the zero-bundler HTML frontend.
-- [x] Create and automatically use the v2 default notes folder in the desktop build.
-- [x] Complete the desktop Markdown create/read/update/trash/restore loop.
-- [ ] Complete macOS real-app smoke testing for save, close, reopen, and external file visibility.
-- [ ] Validate and package Windows and Linux builds on their native systems.
+v1 Web/PWA plans remain historical compatibility references. They do not redefine the v2 desktop or mobile release scope.
 
-The alpha config builds the macOS `.app` target only. DMG packaging remains deferred until the desktop storage and Syncthing connection flows are stable.
+## 2. Current Baseline
 
-## Phase V2.2: Sync Center UI
+Completed and verified:
 
-- [x] Replace the old sync settings dialog with a sync center view.
-- [x] Use `window.syncService` for all new desktop sync UI calls.
-- [x] Keep existing `js/sync.js` functions as Web/PWA fallback.
-- [x] Show local editing status separately from P2P sync status.
-- [x] Read the local device ID, folders, devices, connections, selected folder status, and completion data through the credential-aware desktop proxy.
-- [x] Route desktop refresh, manual scan, configuration-assist reads, and Syncthing Web UI opening through Tauri commands.
+- Tauri v2 desktop shell with zero-bundler HTML frontend.
+- Independent v2 Markdown storage mode using an application-owned default notes folder.
+- Create, read, update, trash, restore, and permanent delete for desktop Markdown notes.
+- Bundled Syncthing v2.1.2 sidecar for macOS Apple Silicon.
+- Application-owned Syncthing identity, configuration, database, logs, ports, and backend credential.
+- First-run default folder creation and isolated folder binding.
+- Device-code pairing with validation, preview, second confirmation, folder sharing, readback, and rollback.
+- Offline local-device QR display with manual code copy fallback.
+- Bounded Syncthing event polling while the sync center is open.
+- Graceful sidecar shutdown on manual stop, window close, app quit, and Tauri restart requests.
+- Sidecar fallback termination when graceful shutdown exceeds its bounded timeout.
+- macOS Apple Silicon packaged-app validation, including restart identity preservation and exit cleanup.
+- Frontend test suite and 31 Rust tests passing at the latest implementation checkpoint.
 
-## Phase V2.3: Syncthing Runtime Management
+Known release gaps:
 
-- [x] Detect an existing system Syncthing installation for development and compatibility.
-- [x] Start an external Syncthing only after explicit user action.
-- [x] Track managed process startup, health, early exit, and shutdown.
-- [x] Bundle Syncthing as the default desktop sidecar so normal users install only s-light notes.
-- [x] Store the sidecar identity, database, logs, and credentials outside the notes folder.
+- Only macOS Apple Silicon has a bundled sidecar and packaged-app proof.
+- Windows and Linux native builds have not been completed.
+- macOS Intel, Windows x64, and Linux x64 sidecar binaries are not bundled.
+- QR scanning is not implemented.
+- Real two-device synchronization and conflict handling have not been completed.
+- Android and iOS installable clients have not been created.
+- Automatic installer/updater integration has not been created.
 
-Current status: the macOS Apple Silicon package includes Syncthing v2.1.2 and starts it automatically. The Rust backend owns its isolated config/data/log/runtime directories, persistent random API Key, loopback GUI/API port, P2P ports, first-run notes-folder binding, device-code pairing, health checks, and shutdown. Pairing validates and normalizes the remote device ID, requires a second confirmation, adds one device, shares only the default notes folder, and verifies or rolls back the transaction. The local device code can also be rendered as an offline QR image without exposing credentials. While the sync center is open, bounded long polling refreshes device, folder, scan, completion, and error states. Live packaged-app validation completed on 2026-07-15 while a separate system Syncthing instance was running. `SLIGHT_SYNCTHING_BIN` remains an explicit development override; QR scanning, Windows, Linux, and macOS Intel artifacts are still pending.
+## 3. Product Release Target
 
-### V2.3 Sidecar Product Decision
+The first usable v2 desktop release must allow a non-technical user to:
 
-- The bundled Syncthing sidecar is the primary desktop sync engine for release builds.
-- A system-installed Syncthing remains an advanced/development fallback, not a normal-user prerequisite.
-- The standard UI must not ask users to start Syncthing, enter an API address, enter an API Key, or open the Syncthing Web UI.
-- The Rust backend owns sidecar startup, shutdown, credentials, configuration, health checks, and REST access.
-- In v2 alpha, closing the final window or quitting the app stops the managed sidecar. Tray/background sync is deferred until it can be offered as an explicit setting.
-- Syncthing automatic upgrades are disabled; the application version pins and updates the bundled engine.
-- Existing system Syncthing data must not be reused or overwritten by the bundled engine.
+1. Install and open a normal desktop application.
+2. Create or use the application-owned Markdown notes folder.
+3. Pair another device without entering API addresses, ports, or API Keys.
+4. Create and edit ordinary `.md` files while offline.
+5. See connection, folder, scan, completion, and error states.
+6. Quit the app knowing that the alpha sidecar has stopped.
+7. Restart the app without losing the device identity or folder configuration.
 
-### V2.3 Sidecar Implementation Checklist
+The first mobile release is a compatibility milestone, not a promise of identical background behavior across platforms. Android and iOS must preserve Markdown compatibility and clearly state their synchronization limitations.
 
-- [x] Pin one Syncthing version and record its source, checksum, license notices, and supported configuration schema.
-- [x] Add the Apple Silicon target-triple binary under `src-tauri/binaries/` and configure Tauri `bundle.externalBin`.
-- [ ] Add macOS Intel, Windows x64, and Linux x64 packages. The macOS Apple Silicon proof is complete.
-- [x] Create an application-owned Syncthing home under the Tauri app-data directory.
-- [x] Generate a random API Key in Rust and keep it out of frontend state and the synchronized notes directory.
-- [x] Bind the REST/GUI endpoint to loopback on an application-owned port and reject LAN exposure.
-- [x] Launch the sidecar with no browser, no self-upgrade, bounded restart handling, and application-owned logs.
-- [x] Prefer the bundled sidecar in release builds while retaining explicit external-binary override for development.
-- [x] On first run, create and bind the default notes folder without exposing raw Syncthing configuration.
-- [x] Replace API address and API Key fields with a normal device-pairing wizard.
-- [x] Add device-code pairing, mutual confirmation, default-folder sharing, and understandable connection states.
-- [x] Add an offline QR representation of the local device code.
-- [ ] Add QR scanning where the platform permits it, with manual code entry retained as the fallback.
-- [x] Subscribe to bounded Syncthing events for device, folder, scan, completion, and error updates while the sync center is open.
-- [x] Decide that v2 alpha stops sync when the final window or app closes, and show this behavior in the sync center.
-- [x] Stop the sidecar through Syncthing's authenticated shutdown endpoint on normal window close, app quit, and Tauri restart requests, with a tracked-process fallback.
-- [x] Preserve sidecar identity and configuration outside the app bundle across clean stop and restart.
-- [ ] Connect the same shutdown barrier to the installer/updater migration flow once automatic updates are implemented.
+## 4. Priority and Dependency Order
 
-### V2.3 Sidecar Acceptance Criteria
+Work must follow this order:
 
-- A clean computer without Syncthing installed can install s-light notes and start the sync engine.
-- The first normal sync setup does not require a terminal, browser, port, API address, API Key, or separate Syncthing application.
-- The bundled engine uses an isolated identity/configuration directory and can coexist with a system Syncthing installation.
-- The frontend never receives the sidecar API Key; it invokes only constrained Tauri commands.
-- Sidecar crashes, port conflicts, unsupported binaries, and configuration migration failures produce actionable app messages.
-- App updates preserve the device identity and notes folder binding while updating the pinned sidecar safely.
+1. Finish macOS desktop smoke coverage.
+2. Build and validate Windows and Linux desktop packages.
+3. Add the missing desktop sidecar artifacts.
+4. Validate real two-device synchronization and conflicts.
+5. Define and prototype the mobile packaging route.
+6. Add platform-specific QR scanning and mobile synchronization.
+7. Add signed installers, update migration, and release automation.
 
-## Phase V2.4: Safe Configuration
+Mobile packaging and update work must not be used to mask unfinished desktop synchronization behavior.
 
-- [x] Generate a configuration preview restricted to the verified v2 default notes path.
-- [x] Detect when the selected Syncthing folder already manages the default notes path.
-- [x] Show folder ID, folder path, devices, and restart impact before writing.
-- [x] Reject duplicate folder IDs and paths outside the v2 notes directory.
-- [x] Convert `syncthing_apply_folder_config` from preview-only to a separate confirmed-write step.
-- [x] Issue a five-minute, single-use confirmation token without storing the API Key.
-- [x] Re-read folder configuration immediately before writing and reject new ID/path conflicts.
-- [x] Verify the new folder after writing and attempt rollback if verification fails.
-- [x] Validate the authenticated create/readback/rollback request sequence against a temporary local protocol fixture.
-- Never mutate a user-managed external Syncthing configuration without a second confirmation. The isolated app-owned sidecar may idempotently bootstrap its own ports and default notes folder.
+## 5. Phase V2.1: Desktop Alpha Completion
 
-## Next Development Step
+### 5.1 macOS Smoke Test
 
-- Add QR scanning only after camera permission and desktop/mobile packaging boundaries are defined.
-- Validate update migration and rollback when the installer/updater phase begins.
-- Validate executable discovery and startup on native Windows and Linux before packaging their sidecars.
-- Add and checksum macOS Intel, Windows x64, and Linux x64 sidecar artifacts.
+- `[ ]` Create a note, edit it, close the app, reopen it, and verify content.
+- `[ ]` Verify the saved `.md` file is visible and readable in Finder.
+- `[ ]` Modify a Markdown file outside the app and verify the app can observe the change after refresh/reopen.
+- `[ ]` Verify delete, restore, permanent delete, and `.trash` behavior in the packaged app.
+- `[ ]` Verify the desktop app never shows the browser folder-permission picker.
+- `[ ]` Verify local editing remains available when the sidecar is stopped or unavailable.
 
-## Phase V2.5: Real-Device Validation
+Current checkpoint (2026-07-15): the packaged app launches and remains running when sidecar startup fails, and the failure is reported without terminating the main process. Automated UI interaction could not complete because macOS denied Accessibility access to `osascript` and denied screen capture. The create/edit/reopen, external modification, trash, permission-picker, and actual editing-without-sidecar items therefore remain unverified and must be completed through the manual checklist in `V2_TEST_PLAN.md`.
 
-- Test two desktop devices on the same LAN.
-- Test one desktop plus Android with Syncthing-Fork.
-- Test iOS file workflow with Möbius Sync or import/export.
-- Capture conflict behavior and update the sync center copy.
+Exit condition: all items pass on the packaged macOS Apple Silicon application and are recorded in the manual test section.
 
-Mobile packaging does not reuse the desktop sidecar artifact directly. Android should wrap the Syncthing core in a platform foreground service and can target continuous background sync. iOS may embed an adapted Syncthing core, but its product promise is foreground and opportunistic background sync because continuous background execution cannot be guaranteed.
+### 5.2 Desktop Regression Gate
 
-## Commit Strategy
+- `[x]` Run `npm test` from the v2 repository.
+- `[x]` Run `cargo test --manifest-path src-tauri/Cargo.toml`.
+- `[x]` Run `npm run tauri:build`.
+- `[x]` Confirm the v1 repository has no unintended changes. The existing `css/style.css` modification predates this v2 checkpoint and was not touched.
+- `[ ]` Confirm the v2 working tree contains only the intended release changes before tagging.
 
-- Commit docs and scaffold separately from runtime behavior changes.
-- Keep v2 Web/PWA compatibility fixes separate from Tauri-specific work.
-- Do not merge v2 changes into a release branch until desktop launch and v1 Web/PWA smoke tests pass.
+## 6. Phase V2.2: Windows and Linux Desktop Packages
+
+### 6.1 Native Build Matrix
+
+Build and test on the native operating system. Cross-compilation is not accepted as the only verification path.
+
+- `[ ]` Windows x64: install Rust, Node.js, Tauri prerequisites, and WebView2 requirements.
+- `[ ]` Windows x64: run frontend tests, Rust tests, and Tauri build.
+- `[ ]` Windows x64: install the generated package and run the desktop Markdown loop.
+- `[ ]` Linux x64: install GTK/WebKit/Tauri prerequisites and run frontend tests, Rust tests, and Tauri build.
+- `[ ]` Linux x64: install the generated package and run the desktop Markdown loop.
+- `[ ]` macOS Intel: build and run the desktop package on native hardware or an approved native CI runner.
+
+### 6.2 Sidecar Artifacts
+
+- `[x]` macOS Apple Silicon: `aarch64-apple-darwin` proof completed.
+- `[ ]` macOS Intel: add and verify `x86_64-apple-darwin`.
+- `[ ]` Windows x64: add and verify `x86_64-pc-windows-msvc` with the executable suffix required by Tauri.
+- `[ ]` Linux x64: add and verify `x86_64-unknown-linux-gnu`.
+- `[ ]` Record the exact Syncthing version, source URL, checksum, license notice, and target triple for every artifact.
+- `[ ]` Verify each package starts its sidecar with an isolated application-data directory and the correct loopback/API/P2P ports.
+- `[ ]` Verify each package can coexist with a system Syncthing installation without reusing or overwriting its identity.
+- `[ ]` Verify each package stops the sidecar on normal app quit and preserves identity on restart.
+
+### 6.3 Package Acceptance
+
+- `[ ]` Windows installer launches, creates the notes folder, and exposes no raw Syncthing configuration in the normal UI.
+- `[ ]` Linux package launches, creates the notes folder, and exposes no raw Syncthing configuration in the normal UI.
+- `[ ]` Unsupported architecture, missing sidecar, port conflict, early exit, and corrupt configuration produce actionable messages.
+- `[ ]` Package artifacts and checksums are stored outside source-controlled temporary build output.
+
+Exit condition: one installable package is validated for each supported desktop target, with its sidecar artifact and test record.
+
+## 7. Phase V2.3: Real P2P Synchronization
+
+This phase validates the product behavior against two independent Syncthing identities. Mock protocol tests are not sufficient for completion.
+
+### 7.1 Two-Desktop Pairing
+
+- `[ ]` Pair two packaged desktop applications on the same LAN using device codes.
+- `[ ]` Confirm the local device code and remote device code are both required.
+- `[ ]` Confirm the default `s-light-notes` folder is shared only after the confirmation step.
+- `[ ]` Confirm both devices show the remote device as connected when the network permits it.
+- `[ ]` Confirm reconnecting an offline device resumes synchronization without recreating the folder.
+
+### 7.2 File Synchronization
+
+- `[ ]` Device A creates a note; Device B receives the `.md` file.
+- `[ ]` Device B edits the note; Device A receives the update.
+- `[ ]` Both devices create different notes while disconnected; both notes survive reconnection.
+- `[ ]` Closing and reopening either app does not change the Syncthing device identity.
+- `[ ]` Stopping the app stops only the app-owned sidecar and does not stop a separately installed system Syncthing.
+
+### 7.3 Conflict Handling
+
+- `[ ]` Edit the same note independently on both devices while offline.
+- `[ ]` Reconnect and verify Syncthing creates a conflict copy rather than silently overwriting content.
+- `[ ]` Show the conflict copy as a conflict item, separate from normal notes.
+- `[ ]` Preserve the original conflict content during view, copy, keep, and delete operations.
+- `[ ]` Update sync-center wording to match the observed conflict behavior.
+
+Exit condition: a two-device test record contains successful create, update, offline, reconnect, and conflict cases.
+
+## 8. Phase V2.4: QR and Pairing Completion
+
+- `[x]` Display the local device code as an offline QR image.
+- `[x]` Retain manual copy and manual entry as a fallback.
+- `[ ]` Define camera permission behavior separately for Android and iOS.
+- `[ ]` Add QR scanning for the selected mobile platform.
+- `[ ]` Reject malformed or unsupported scanned data before any configuration write.
+- `[ ]` Keep the same preview, second confirmation, folder scope, and rollback rules for scanned codes.
+- `[ ]` Verify that camera denial leaves manual device-code pairing fully usable.
+
+QR scanning is blocked until the mobile shell and permission model are selected.
+
+## 9. Phase V2.5: Mobile Compatibility Track
+
+### 9.1 Mobile Baseline Before Native Sync
+
+- `[ ]` Test the current Web/PWA compatibility entry on Android Chrome using HTTPS or localhost.
+- `[ ]` Test the current Web/PWA compatibility entry on iOS Safari and standalone Home Screen mode.
+- `[ ]` Verify 320px-430px layouts, safe-area spacing, keyboard behavior, sidebar behavior, toolbar behavior, and no horizontal overflow.
+- `[ ]` Verify Android file workflow with IndexedDB and the selected file-sharing route.
+- `[ ]` Verify iOS import/export or Möbius Sync folder workflow.
+- `[ ]` Verify mobile editing remains usable when the sync engine is unavailable.
+
+### 9.2 Android Native Route
+
+- `[ ]` Choose between a Tauri mobile shell with a native Syncthing integration and an external Syncthing-Fork compatibility route.
+- `[ ]` Create an Android project or Tauri Android target without reusing the desktop sidecar binary.
+- `[ ]` Implement storage permissions and a foreground-service lifecycle if an embedded engine is selected.
+- `[ ]` Define battery-restriction, process-recovery, and notification behavior.
+- `[ ]` Pair Android with a desktop device and validate create/update/offline/conflict flows.
+- `[ ]` Document the behavior when the user force-stops the Android synchronization service.
+
+### 9.3 iOS Native Route
+
+- `[ ]` Create an iOS project or Tauri iOS target with the existing editor core.
+- `[ ]` Implement Files/document-picker access and security-scoped folder handling.
+- `[ ]` Define foreground synchronization and opportunistic background task behavior.
+- `[ ]` Preserve Möbius Sync and import/export as a fallback until embedded synchronization is proven.
+- `[ ]` Test permission denial, suspended app recovery, relaunch, and file conflict visibility on two real iOS devices.
+- `[ ]` Verify App Store/TestFlight signing and privacy declarations before distribution.
+
+Mobile exit condition: at least one platform has an installable client with a documented synchronization promise, real-device tests, and a Markdown-compatible fallback.
+
+## 10. Phase V2.6: Release and Update Engineering
+
+- `[ ]` Select Windows installer format and Linux package formats.
+- `[ ]` Add macOS Intel, Windows, and Linux artifact checksums to the release process.
+- `[ ]` Add code signing/notarization requirements for supported desktop platforms.
+- `[ ]` Add an updater only after package installation and sidecar migration are stable.
+- `[ ]` Make the updater call the same sidecar shutdown barrier before replacing binaries.
+- `[ ]` Preserve Syncthing identity, configuration, database, and notes-folder binding across updates.
+- `[ ]` Test interrupted update, rollback, incompatible sidecar version, and failed restart behavior.
+- `[ ]` Create a release checklist covering installer, first run, pairing, sync, conflict, offline, update, and uninstall behavior.
+
+## 11. Explicit Non-Goals for This Plan
+
+- No central sync server, account system, or cloud note database.
+- No real-time collaborative editing.
+- No automatic conflict merge in v2 alpha.
+- No silent background/tray synchronization before an explicit product decision and platform review.
+- No direct reuse of the desktop Syncthing sidecar binary in Android or iOS packages.
+- No automatic update system before native package behavior is stable.
+
+## 12. Immediate Execution Queue
+
+The next implementation sessions should use this order:
+
+1. Complete macOS packaged-app Markdown smoke testing.
+2. Build the Windows package inside the Windows virtual machine and record failures.
+3. Add the Windows sidecar artifact and repeat the Windows package test.
+4. Build and validate the Linux package and sidecar artifact.
+5. Run the first real two-desktop LAN synchronization test.
+6. Record conflict behavior before changing the conflict UI.
+7. Choose the Android and iOS packaging route based on real file-access constraints.
+
+## 13. Change and Commit Rules
+
+- Keep v2 commits in the independent v2 repository.
+- Keep desktop, mobile, sidecar, and release changes in separate commits when practical.
+- Do not mark a checklist item complete from a mock test alone when the item requires a real OS, installer, device, or network.
+- Update this plan and `V2_TEST_PLAN.md` together when an acceptance condition changes.
+- Do not merge v2 into a release branch until the target package, sidecar, and corresponding manual test record exist.
