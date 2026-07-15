@@ -72,14 +72,14 @@ Mobile packaging and update work must not be used to mask unfinished desktop syn
 
 ### 5.1 macOS Smoke Test
 
-- `[ ]` Create a note, edit it, close the app, reopen it, and verify content.
-- `[ ]` Verify the saved `.md` file is visible and readable in Finder.
-- `[ ]` Modify a Markdown file outside the app and verify the app can observe the change after refresh/reopen.
-- `[ ]` Verify delete, restore, permanent delete, and `.trash` behavior in the packaged app.
-- `[ ]` Verify the desktop app never shows the browser folder-permission picker.
+- `[x]` Create a note, edit it, close the app, reopen it, and verify content.
+- `[x]` Verify the saved `.md` file is visible and readable in Finder.
+- `[x]` Modify a Markdown file outside the app and verify the app can observe the change after refresh/reopen.
+- `[x]` Verify delete, restore, permanent delete, and `.trash` behavior in the packaged app.
+- `[x]` Verify the desktop app never shows the browser folder-permission picker.
 - `[ ]` Verify local editing remains available when the sidecar is stopped or unavailable.
 
-Current checkpoint (2026-07-15): the packaged app launches and remains running when sidecar startup fails, and the failure is reported without terminating the main process. Automated UI interaction could not complete because macOS denied Accessibility access to `osascript` and denied screen capture. The create/edit/reopen, external modification, trash, permission-picker, and actual editing-without-sidecar items therefore remain unverified and must be completed through the manual checklist in `V2_TEST_PLAN.md`.
+Current checkpoint (2026-07-15): the user completed the packaged-app manual acceptance run and confirmed the create/edit/reopen, Finder visibility, external modification, trash lifecycle, and no-browser-permission-picker checks. A disposable package copy also proved that a sidecar startup failure does not terminate the main app. Actual editing and saving while the sidecar is unavailable remains a separate pending check.
 
 Exit condition: all items pass on the packaged macOS Apple Silicon application and are recorded in the manual test section.
 

@@ -58,11 +58,17 @@ Verified in the current environment:
 - `npm test`, all 31 Rust tests, and `npm run tauri:build` passed from the independent v2 repository.
 - The v1 repository still contains only its pre-existing `css/style.css` modification; the v2 run did not change v1.
 
-Not yet accepted as passed:
+Manual acceptance confirmed by the user on 2026-07-15:
 
-- macOS denied Accessibility access to `osascript`, so controls could not be clicked or typed through the automated smoke runner.
-- macOS also denied screen capture, so the absence of the browser folder-permission picker could not be independently recorded.
-- Create/edit/save/reopen, Finder visibility, external modification, trash/restore/permanent delete, and actual editing while the sidecar is unavailable still require a short manual run.
+- Create, edit, save, quit, reopen, and content persistence passed.
+- The saved Markdown file was visible and readable outside the app.
+- An external Markdown edit was observed by the app after reopen or refresh.
+- Delete, restore, repeated delete, permanent delete, and `.trash` behavior passed.
+- No browser folder-permission picker appeared during the packaged-app workflow.
+
+Remaining macOS check:
+
+- The disposable-package test proved that sidecar startup failure leaves the main app running, but actual editing and saving while the sidecar is unavailable still requires explicit confirmation.
 
 Manual acceptance run:
 
@@ -73,7 +79,7 @@ Manual acceptance run:
 5. Delete the note, restore it from Trash, delete it again, and permanently delete it; confirm the file moves through `.trash` and is finally absent.
 6. Confirm no browser folder-permission picker appears at any point.
 
-Do not mark Phase 5.1 complete until all six steps are recorded as passed.
+All six manual steps above were reported as passed on 2026-07-15. Phase 5.1 remains open only for the separate editing-without-sidecar check.
 
 ## Bundled Sidecar Tests
 
