@@ -53,10 +53,14 @@
 
 macOS Apple Silicon packaged-app validation passed on 2026-07-15: the bundle contained the pinned arm64 binary, automatically started it beside an existing system Syncthing instance, used isolated ports and app data, created the default folder binding, preserved a private backend credential, and stopped the sidecar when the app closed.
 
+Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sidecar processes, released loopback port 8385, restarted successfully, and preserved the certificate/private-key hashes. The final exit callback also cleaned up an authenticated app-owned sidecar left without a tracked child handle by the earlier failing build.
+
 - Clean machine without Syncthing installed: the packaged app starts its bundled engine.
 - Existing system Syncthing: the bundled engine uses a separate home and port without modifying the system instance.
 - First run: device identity, backend API Key, notes folder, and folder binding are created without raw configuration UI.
 - Restart and upgrade: device identity and folder binding survive app restart and sidecar version update.
+- Normal window close, macOS Quit, and Tauri restart requests use graceful authenticated shutdown before tracked-process fallback.
+- The sync center states that quitting the alpha app stops synchronization; no hidden tray/background mode remains active.
 - Port conflict, missing/wrong-architecture binary, corrupted config, and early process exit produce actionable messages.
 - API Key does not appear in frontend state, synchronized Markdown files, logs, or user-visible diagnostics.
 - macOS Apple Silicon/Intel, Windows x64, and Linux x64 packages contain the correct target-triple sidecar.

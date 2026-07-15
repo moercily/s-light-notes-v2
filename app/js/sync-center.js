@@ -51,7 +51,11 @@
         }
 
         if (desktopStatus.running) {
-            return card('同步引擎', desktopStatus.managed ? '由应用托管' : '已检测到 Syncthing', desktopStatus.message || '');
+            return card(
+                '同步引擎',
+                desktopStatus.managed ? '由应用托管' : '已检测到 Syncthing',
+                desktopStatus.managed ? '关闭应用时同步也会停止。' : (desktopStatus.message || '')
+            );
         }
 
         if (desktopStatus.managed) {

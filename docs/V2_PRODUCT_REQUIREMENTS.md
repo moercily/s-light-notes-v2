@@ -18,11 +18,13 @@ s-light notes v2 is a P2P synced Markdown notes app. Notes remain ordinary `.md`
 - Normal users do not install, start, or manually configure a separate Syncthing application.
 - Device connection uses an in-app device-code or QR pairing flow instead of API addresses, ports, or API Keys.
 - The app shows P2P sync status in a dedicated sync center.
+- The v2 alpha sync center clearly states that quitting the app stops P2P synchronization.
 - The app keeps editing usable when Syncthing is unavailable.
 
 ## Platform Policy
 
 - Desktop is the primary v2 platform: macOS, Windows, and Linux through Tauri with a bundled Syncthing sidecar.
+- Desktop alpha does not silently remain in the tray or background after the user quits the app.
 - Android targets an in-app Syncthing engine managed by an Android foreground service; Syncthing-Fork remains a compatibility/testing reference.
 - iOS may embed an adapted Syncthing engine, but only promises foreground and opportunistic background synchronization.
 - Möbius Sync or file import/export remains an iOS fallback until the in-app engine is validated.

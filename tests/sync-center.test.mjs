@@ -98,6 +98,7 @@ async function testReportsManagedEngineLifecycle() {
   assert.equal(starting.engine.value, '正在启动');
   assert.equal(starting.engine.detail, 'waiting for health');
   assert.equal(running.engine.value, '由应用托管');
+  assert.equal(running.engine.detail, '关闭应用时同步也会停止。');
 }
 
 await testSeparatesLocalSaveFromP2pSync();

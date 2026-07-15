@@ -26,6 +26,8 @@ const SIDECAR_EVENT_FILTERS: &str = "DeviceConnected,DeviceDisconnected,DeviceRe
 const CONFIG_CONFIRMATION_TTL: Duration = Duration::from_secs(300);
 const SYNCTHING_STARTUP_ATTEMPTS: usize = 40;
 const SYNCTHING_STARTUP_INTERVAL: Duration = Duration::from_millis(250);
+const SYNCTHING_SHUTDOWN_ATTEMPTS: usize = 30;
+const SYNCTHING_SHUTDOWN_INTERVAL: Duration = Duration::from_millis(100);
 static CONFIG_TOKEN_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
@@ -38,7 +40,7 @@ struct SyncthingSidecar {
     child: Mutex<Option<CommandChild>>,
     runtime: Mutex<Option<SidecarRuntimeConfig>>,
     last_exit: Mutex<Option<Option<i32>>>,
-    start_lock: Mutex<()>,
+    lifecycle_lock: Mutex<()>,
 }
 
 #[derive(Debug, Clone)]
@@ -767,7 +769,7 @@ fn start_syncthing_engine(
         return start_external_syncthing(external);
     }
     let _start_guard = sidecar
-        .start_lock
+        .lifecycle_lock
         .lock()
         .map_err(|_| "无法锁定 Syncthing sidecar 启动流程。".to_string())?;
     let runtime = sidecar_runtime(app, sidecar)?;
@@ -818,20 +820,16 @@ fn syncthing_stop(
     sidecar: State<'_, SyncthingSidecar>,
 ) -> Result<SyncthingStatus, String> {
     if !use_external_override() {
-        let child = sidecar
-            .child
-            .lock()
-            .map_err(|_| "无法读取 Syncthing sidecar 进程状态。".to_string())?
-            .take();
-        if let Some(child) = child {
-            child
-                .kill()
-                .map_err(|err| format!("无法停止内置 P2P 同步引擎：{err}"))?;
-        }
+        stop_managed_sidecar(&app, &sidecar)?;
         let runtime = sidecar_runtime(&app, &sidecar)?;
         return Ok(sidecar_status_snapshot(&runtime, &sidecar));
     }
 
+    stop_external_managed_process(&external)?;
+    Ok(external_syncthing_status_snapshot(false))
+}
+
+fn stop_external_managed_process(external: &SyncthingProcess) -> Result<(), String> {
     let mut guard = external
         .child
         .lock()
@@ -851,8 +849,93 @@ fn syncthing_stop(
                 .map_err(|err| format!("等待 Syncthing 停止时发生错误：{err}"))?;
         }
     }
+    Ok(())
+}
 
-    Ok(external_syncthing_status_snapshot(false))
+fn request_sidecar_shutdown_at(api_base: &str, api_key: &str) -> Result<(), String> {
+    let url = build_syncthing_url_at(api_base, "/rest/system/shutdown")?;
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(1))
+        .timeout_read(Duration::from_secs(2))
+        .timeout_write(Duration::from_secs(2))
+        .build();
+    let response = apply_api_key(agent.post(&url), validate_api_key(Some(api_key))?)
+        .set("Content-Type", "application/json")
+        .send_string("");
+    match response {
+        Ok(response) if (200..300).contains(&response.status()) => Ok(()),
+        Ok(response) => Err(format!(
+            "Syncthing 拒绝正常退出，状态码 {}。",
+            response.status()
+        )),
+        Err(ureq::Error::Status(status, _)) => {
+            Err(format!("Syncthing 拒绝正常退出，状态码 {status}。"))
+        }
+        Err(err) => Err(format!("无法请求 Syncthing 正常退出：{err}")),
+    }
+}
+
+fn wait_for_sidecar_shutdown(runtime: &SidecarRuntimeConfig) -> bool {
+    for _ in 0..SYNCTHING_SHUTDOWN_ATTEMPTS {
+        if !sidecar_authenticated(runtime) {
+            return true;
+        }
+        std::thread::sleep(SYNCTHING_SHUTDOWN_INTERVAL);
+    }
+    !sidecar_authenticated(runtime)
+}
+
+fn stop_managed_sidecar(app: &AppHandle, sidecar: &SyncthingSidecar) -> Result<(), String> {
+    let _stop_guard = sidecar
+        .lifecycle_lock
+        .lock()
+        .map_err(|_| "无法锁定内置同步引擎停止流程。".to_string())?;
+    let runtime = sidecar_runtime(app, sidecar)?;
+    let child = sidecar
+        .child
+        .lock()
+        .map_err(|_| "无法读取 Syncthing sidecar 进程状态。".to_string())?
+        .take();
+
+    let was_authenticated = sidecar_authenticated(&runtime);
+    let shutdown_error = if was_authenticated {
+        let error = request_sidecar_shutdown_at(SIDECAR_SYNCTHING_URL, &runtime.api_key).err();
+        if wait_for_sidecar_shutdown(&runtime) {
+            return Ok(());
+        }
+        error
+    } else {
+        if child.is_none() {
+            return Ok(());
+        }
+        None
+    };
+
+    if let Some(child) = child {
+        child
+            .kill()
+            .map_err(|err| format!("无法停止内置 P2P 同步引擎：{err}"))?;
+    }
+    if wait_for_sidecar_shutdown(&runtime) {
+        return Ok(());
+    }
+
+    Err(shutdown_error.unwrap_or_else(|| {
+        "内置 P2P 同步引擎未在限定时间内退出，请结束残留进程后重试。".to_string()
+    }))
+}
+
+fn cleanup_managed_sync(app: &AppHandle) {
+    if !use_external_override() {
+        let sidecar = app.state::<SyncthingSidecar>();
+        if let Err(err) = stop_managed_sidecar(app, &sidecar) {
+            eprintln!("Syncthing 退出清理失败：{err}");
+        }
+    }
+    let external = app.state::<SyncthingProcess>();
+    if let Err(err) = stop_external_managed_process(&external) {
+        eprintln!("外部 Syncthing 退出清理失败：{err}");
+    }
 }
 
 fn active_syncthing_target(
@@ -2144,7 +2227,7 @@ fn apply_api_key(request: ureq::Request, api_key: Option<&str>) -> ureq::Request
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .manage(SyncthingProcess::default())
@@ -2166,20 +2249,7 @@ pub fn run() {
             if !matches!(event, tauri::WindowEvent::Destroyed) {
                 return;
             }
-            let app = window.app_handle();
-            let sidecar = app.state::<SyncthingSidecar>();
-            if let Ok(mut child) = sidecar.child.lock() {
-                if let Some(child) = child.take() {
-                    let _ = child.kill();
-                }
-            }
-            let external = app.state::<SyncthingProcess>();
-            if let Ok(mut child) = external.child.lock() {
-                if let Some(child) = child.as_mut() {
-                    let _ = child.kill();
-                }
-                child.take();
-            };
+            cleanup_managed_sync(window.app_handle());
         })
         .invoke_handler(tauri::generate_handler![
             get_app_paths,
@@ -2203,8 +2273,16 @@ pub fn run() {
             open_notes_folder,
             open_syncthing_web
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("error while running s-light notes");
+    app.run(|app_handle, event| {
+        if matches!(
+            event,
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+        ) {
+            cleanup_managed_sync(app_handle);
+        }
+    });
 }
 
 #[cfg(test)]
@@ -2470,6 +2548,20 @@ mod tests {
         (api_base, requests, handle)
     }
 
+    fn spawn_shutdown_server() -> (String, Arc<Mutex<Vec<CapturedHttpRequest>>>, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let api_base = format!("http://{}", listener.local_addr().unwrap());
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&requests);
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            captured.lock().unwrap().push(request);
+            write_json_response(&mut stream, 200, "{}");
+        });
+        (api_base, requests, handle)
+    }
+
     #[test]
     fn resolves_configured_and_path_syncthing_executables() {
         let bin_dir = temporary_notes_dir("syncthing-bin");
@@ -2657,6 +2749,23 @@ mod tests {
             Some("events-key")
         );
         assert!(captured[0].path.starts_with("/rest/events?since=41"));
+    }
+
+    #[test]
+    fn graceful_shutdown_uses_authenticated_syncthing_endpoint() {
+        let (api_base, requests, server) = spawn_shutdown_server();
+
+        request_sidecar_shutdown_at(&api_base, "shutdown-key").unwrap();
+        server.join().unwrap();
+        let captured = requests.lock().unwrap();
+
+        assert_eq!(captured[0].method, "POST");
+        assert_eq!(captured[0].path, "/rest/system/shutdown");
+        assert_eq!(
+            captured[0].headers.get("x-api-key").map(String::as_str),
+            Some("shutdown-key")
+        );
+        assert!(captured[0].body.is_empty());
     }
 
     #[test]

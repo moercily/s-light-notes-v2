@@ -58,6 +58,14 @@ In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible.
 - Symlinked note files and symlinked managed directories are not followed.
 - Web/PWA builds continue to use File System Access API or IndexedDB without calling desktop commands.
 
+## Desktop Lifecycle
+
+- The alpha product lifecycle is app-bound: closing the final window or quitting the app stops the bundled sidecar.
+- Manual stop, window destruction, app exit requests, final event-loop exit, and future Tauri restart requests share the same backend cleanup path.
+- Cleanup first posts to the authenticated Syncthing `/rest/system/shutdown` endpoint and waits for health to disappear. It kills only the app-tracked child if graceful shutdown exceeds the bounded timeout.
+- A running app can also shut down an authenticated app-owned sidecar left by an earlier interrupted instance, even when no child handle remains.
+- Syncthing identity, database, and configuration remain in the application-data directory and are not deleted during shutdown or app replacement.
+
 ## Security Rules
 
 - The bundled backend targets `http://127.0.0.1:8385`; this value is fixed in Rust and cannot be supplied by the frontend. External development override mode uses `http://127.0.0.1:8384`.
@@ -81,6 +89,7 @@ In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible.
 - Pairing writes require a separate confirmation token. The backend rechecks duplicates, preserves existing folder devices, and verifies both the device and folder configuration.
 - The QR image encodes only the canonical local device ID. Rust generates the SVG offline; it contains no API Key, network address, folder path, or note content.
 - Event polling fixes the accepted event types, timeout, and result limit in Rust. The frontend supplies only the last processed non-negative event ID and stops polling when the sync center closes.
+- Sidecar start and stop share one lifecycle lock so a close request cannot race with an in-progress automatic start.
 
 ## v2 Alpha Limitations
 

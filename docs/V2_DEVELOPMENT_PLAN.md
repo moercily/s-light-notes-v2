@@ -53,6 +53,7 @@ Current status: the macOS Apple Silicon package includes Syncthing v2.1.2 and st
 - A system-installed Syncthing remains an advanced/development fallback, not a normal-user prerequisite.
 - The standard UI must not ask users to start Syncthing, enter an API address, enter an API Key, or open the Syncthing Web UI.
 - The Rust backend owns sidecar startup, shutdown, credentials, configuration, health checks, and REST access.
+- In v2 alpha, closing the final window or quitting the app stops the managed sidecar. Tray/background sync is deferred until it can be offered as an explicit setting.
 - Syncthing automatic upgrades are disabled; the application version pins and updates the bundled engine.
 - Existing system Syncthing data must not be reused or overwritten by the bundled engine.
 
@@ -72,8 +73,10 @@ Current status: the macOS Apple Silicon package includes Syncthing v2.1.2 and st
 - [x] Add an offline QR representation of the local device code.
 - [ ] Add QR scanning where the platform permits it, with manual code entry retained as the fallback.
 - [x] Subscribe to bounded Syncthing events for device, folder, scan, completion, and error updates while the sync center is open.
-- [ ] Decide whether closing the window stops sync or leaves a tray/background process, and expose that as a clear setting.
-- [ ] Stop the sidecar cleanly before app updates and preserve its identity/configuration across upgrades.
+- [x] Decide that v2 alpha stops sync when the final window or app closes, and show this behavior in the sync center.
+- [x] Stop the sidecar through Syncthing's authenticated shutdown endpoint on normal window close, app quit, and Tauri restart requests, with a tracked-process fallback.
+- [x] Preserve sidecar identity and configuration outside the app bundle across clean stop and restart.
+- [ ] Connect the same shutdown barrier to the installer/updater migration flow once automatic updates are implemented.
 
 ### V2.3 Sidecar Acceptance Criteria
 
@@ -100,7 +103,7 @@ Current status: the macOS Apple Silicon package includes Syncthing v2.1.2 and st
 ## Next Development Step
 
 - Add QR scanning only after camera permission and desktop/mobile packaging boundaries are defined.
-- Decide and implement the close-window/background-sync lifecycle before adding tray behavior.
+- Validate update migration and rollback when the installer/updater phase begins.
 - Validate executable discovery and startup on native Windows and Linux before packaging their sidecars.
 - Add and checksum macOS Intel, Windows x64, and Linux x64 sidecar artifacts.
 
