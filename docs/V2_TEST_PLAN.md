@@ -74,6 +74,14 @@ macOS Apple Silicon packaged-app validation passed on 2026-07-15: the bundle con
 - Offline QR generation contains only the canonical local device ID and no API Key, folder path, note content, or network address.
 - QR display expands and collapses without overflow at desktop and 390px mobile viewport widths; manual copy remains available.
 
+## Sync Event Tests
+
+- Initial polling requests only the latest matching event; subsequent calls continue after the last processed event ID.
+- Event types, timeout, and result limit are fixed by Rust and cannot be expanded by frontend input.
+- Device, folder, scan, completion, and error events refresh the existing sync-center state instead of creating a second state model.
+- Opening the sync center starts event polling; closing it stops further requests after any in-flight call returns.
+- Event requests use the backend-owned API Key without exposing it to frontend state.
+
 ## External Syncthing Manual Tests
 
 - Syncthing not installed: app shows a clear unavailable state.

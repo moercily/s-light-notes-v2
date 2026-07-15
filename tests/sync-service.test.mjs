@@ -218,6 +218,7 @@ async function testPairingUsesConstrainedDesktopCommandsWithoutApiKeys() {
           invoke: async (command, payload) => {
             calls.push({ command, payload });
             if (command === 'syncthing_pairing_info') return { localDeviceId: 'LOCAL' };
+            if (command === 'syncthing_events') return [{ id: 7, type: 'StateChanged' }];
             if (command === 'syncthing_preview_device_pairing') {
               return { confirmationToken: 'token' };
             }
@@ -229,13 +230,16 @@ async function testPairingUsesConstrainedDesktopCommandsWithoutApiKeys() {
   });
 
   const info = await service.getPairingInfo();
+  const events = await service.getEvents(6);
   const preview = await service.previewDevicePairing(' REMOTE-ID ', ' Laptop ');
   const confirmed = await service.confirmDevicePairing(preview.confirmationToken);
 
   assert.equal(info.localDeviceId, 'LOCAL');
+  assert.equal(events[0].id, 7);
   assert.equal(confirmed.paired, true);
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
     { command: 'syncthing_pairing_info', payload: {} },
+    { command: 'syncthing_events', payload: { request: { since: 6 } } },
     {
       command: 'syncthing_preview_device_pairing',
       payload: { request: { deviceId: 'REMOTE-ID', deviceName: 'Laptop' } },

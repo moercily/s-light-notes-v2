@@ -23,6 +23,10 @@ const AppState = {
     pairingInfo: null,          // 内置同步引擎的设备配对状态
     pairingPreview: null,       // 等待用户二次确认的配对摘要
     pairingQrUrl: null,         // 本机设备二维码的临时 Blob URL
+    syncEventSince: 0,          // 最近处理的 Syncthing 事件编号
+    syncEventPolling: false,    // 同步中心打开时启用事件轮询
+    syncEventTimer: null,       // 下一次事件轮询计时器
+    syncEventGeneration: 0,     // 防止快速关闭重开产生重复轮询
 };
 
 // ========== 初始化 ==========
@@ -268,12 +272,67 @@ function openSyncDialog() {
     refreshDesktopPaths();
     updateSyncKeyWarning();
     $('#sync-dialog').classList.remove('hidden');
+    startSyncEventPolling();
 }
 
 function closeSyncDialog() {
+    stopSyncEventPolling();
     closeSyncBindingConfirmation();
     const dialog = $('#sync-dialog');
     if (dialog) dialog.classList.add('hidden');
+}
+
+function startSyncEventPolling() {
+    if (AppState.syncEventPolling) return;
+    AppState.syncEventPolling = true;
+    AppState.syncEventSince = 0;
+    AppState.syncEventGeneration += 1;
+    pollSyncEvents(AppState.syncEventGeneration);
+}
+
+function stopSyncEventPolling() {
+    AppState.syncEventPolling = false;
+    AppState.syncEventGeneration += 1;
+    if (AppState.syncEventTimer) clearTimeout(AppState.syncEventTimer);
+    AppState.syncEventTimer = null;
+}
+
+function scheduleSyncEventPoll(delay, generation) {
+    if (!AppState.syncEventPolling || generation !== AppState.syncEventGeneration) return;
+    AppState.syncEventTimer = setTimeout(() => pollSyncEvents(generation), delay);
+}
+
+async function pollSyncEvents(generation) {
+    if (!AppState.syncEventPolling || generation !== AppState.syncEventGeneration) return;
+    const status = AppState.syncDesktopStatus;
+    if (!status || status.engineKind !== 'sidecar' || !status.running) {
+        scheduleSyncEventPoll(1000, generation);
+        return;
+    }
+
+    try {
+        const events = await syncService.getEvents(AppState.syncEventSince);
+        if (!AppState.syncEventPolling || generation !== AppState.syncEventGeneration) return;
+        if (Array.isArray(events) && events.length) {
+            AppState.syncEventSince = events.reduce((latest, event) => {
+                return Number.isSafeInteger(event.id) ? Math.max(latest, event.id) : latest;
+            }, AppState.syncEventSince);
+            await refreshFromSyncEvents(events);
+        }
+        scheduleSyncEventPoll(Array.isArray(events) && events.length ? 150 : 500, generation);
+    } catch (err) {
+        if (!AppState.syncEventPolling || generation !== AppState.syncEventGeneration) return;
+        scheduleSyncEventPoll(1500, generation);
+    }
+}
+
+async function refreshFromSyncEvents(events) {
+    const relevant = events.some(event => {
+        const folder = event && event.data && event.data.folder;
+        return !folder || folder === 's-light-notes';
+    });
+    if (!relevant) return;
+    await refreshSyncEngineStatus();
 }
 
 async function onSyncTestConnection() {

@@ -281,6 +281,13 @@
             return invokeDesktop('syncthing_pairing_info');
         },
 
+        async getEvents(since) {
+            const eventId = Number.isSafeInteger(since) && since >= 0 ? since : 0;
+            return invokeDesktop('syncthing_events', {
+                request: { since: eventId },
+            });
+        },
+
         async previewDevicePairing(deviceId, deviceName) {
             return invokeDesktop('syncthing_preview_device_pairing', {
                 request: {

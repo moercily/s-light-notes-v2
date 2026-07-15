@@ -37,6 +37,7 @@ In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible.
 - `syncthing_apply_folder_config`: returns a confirmation summary and a five-minute, single-use token without writing configuration.
 - `syncthing_confirm_folder_config`: consumes the token, rechecks live folder conflicts, creates one new folder, and verifies the result.
 - `syncthing_pairing_info`: returns the local device ID, an offline-generated QR SVG, configured devices, pending devices, and current connection state without returning credentials.
+- `syncthing_events`: performs bounded long polling with fixed event filters, an incremental event ID, and backend-owned credentials.
 - `syncthing_preview_device_pairing`: validates and normalizes one remote device ID and returns a five-minute confirmation summary without writing.
 - `syncthing_confirm_device_pairing`: consumes the one-time token, adds one device, shares only `s-light-notes`, verifies both writes, and rolls back on failure.
 - `open_notes_folder`: opens the notes folder in the system file manager.
@@ -79,10 +80,11 @@ In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible.
 - Device pairing accepts only a validated Syncthing device ID and a bounded display name; the frontend cannot provide addresses, folder paths, folder IDs, or arbitrary device options.
 - Pairing writes require a separate confirmation token. The backend rechecks duplicates, preserves existing folder devices, and verifies both the device and folder configuration.
 - The QR image encodes only the canonical local device ID. Rust generates the SVG offline; it contains no API Key, network address, folder path, or note content.
+- Event polling fixes the accepted event types, timeout, and result limit in Rust. The frontend supplies only the last processed non-negative event ID and stops polling when the sync center closes.
 
 ## v2 Alpha Limitations
 
 - Only the macOS Apple Silicon sidecar is bundled; macOS Intel, Windows x64, and Linux x64 artifacts are pending.
-- QR display and device-code pairing are available. Camera scanning, Syncthing event subscriptions, and conflict-resolution workflows are not complete.
+- QR display, device-code pairing, and sync-center event refresh are available. Camera scanning and conflict-resolution workflows are not complete.
 - External development override mode still accepts a user-provided API Key; standard bundled-sidecar UI hides those advanced fields.
 - Mobile background sync depends on platform-specific Syncthing clients.

@@ -22,6 +22,7 @@ const SIDECAR_BINARY_NAME: &str = "syncthing-sidecar";
 const SIDECAR_FOLDER_ID: &str = "s-light-notes";
 const SIDECAR_SYNC_PORT: u16 = 22001;
 const SIDECAR_DISCOVERY_PORT: u16 = 21028;
+const SIDECAR_EVENT_FILTERS: &str = "DeviceConnected,DeviceDisconnected,DeviceRejected,PendingDevicesChanged,FolderSummary,FolderCompletion,FolderScanProgress,StateChanged,LocalIndexUpdated,RemoteIndexUpdated,FolderErrors,Failure";
 const CONFIG_CONFIRMATION_TTL: Duration = Duration::from_secs(300);
 const SYNCTHING_STARTUP_ATTEMPTS: usize = 40;
 const SYNCTHING_STARTUP_INTERVAL: Duration = Duration::from_millis(250);
@@ -149,6 +150,12 @@ struct DevicePairingPreviewRequest {
 #[serde(rename_all = "camelCase")]
 struct ConfirmDevicePairingRequest {
     confirmation_token: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncthingEventsRequest {
+    since: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1153,6 +1160,54 @@ fn syncthing_pairing_info(
     pairing_info_at(SIDECAR_SYNCTHING_URL, &runtime.api_key)
 }
 
+fn syncthing_events_path(since: Option<u64>) -> String {
+    let since = since.unwrap_or(0);
+    let (timeout, limit) = if since == 0 { (0, 1) } else { (2, 64) };
+    format!(
+        "/rest/events?since={since}&limit={limit}&timeout={timeout}&events={SIDECAR_EVENT_FILTERS}"
+    )
+}
+
+fn syncthing_events_at(
+    api_base: &str,
+    api_key: &str,
+    since: Option<u64>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let events = request_syncthing_json_at(
+        api_base,
+        "GET",
+        &syncthing_events_path(since),
+        None,
+        api_key,
+        "读取 Syncthing 实时状态",
+    )?;
+    let events = events
+        .as_array()
+        .cloned()
+        .ok_or_else(|| "Syncthing 事件响应格式无效。".to_string())?;
+    if events
+        .iter()
+        .any(|event| event["id"].as_u64().is_none() || event["type"].as_str().is_none())
+    {
+        return Err("Syncthing 返回了格式无效的事件。".to_string());
+    }
+    Ok(events)
+}
+
+#[tauri::command]
+async fn syncthing_events(
+    app: AppHandle,
+    request: SyncthingEventsRequest,
+    sidecar: State<'_, SyncthingSidecar>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let runtime = pairing_runtime(&app, &sidecar)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        syncthing_events_at(SIDECAR_SYNCTHING_URL, &runtime.api_key, request.since)
+    })
+    .await
+    .map_err(|err| format!("Syncthing 事件任务异常结束：{err}"))?
+}
+
 #[tauri::command]
 fn syncthing_preview_device_pairing(
     app: AppHandle,
@@ -2142,6 +2197,7 @@ pub fn run() {
             syncthing_apply_folder_config,
             syncthing_confirm_folder_config,
             syncthing_pairing_info,
+            syncthing_events,
             syncthing_preview_device_pairing,
             syncthing_confirm_device_pairing,
             open_notes_folder,
@@ -2396,6 +2452,24 @@ mod tests {
         (api_base, requests, handle)
     }
 
+    fn spawn_events_server() -> (String, Arc<Mutex<Vec<CapturedHttpRequest>>>, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let api_base = format!("http://{}", listener.local_addr().unwrap());
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&requests);
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            captured.lock().unwrap().push(request);
+            write_json_response(
+                &mut stream,
+                200,
+                r#"[{"id":42,"type":"StateChanged","data":{"folder":"s-light-notes","to":"idle"}}]"#,
+            );
+        });
+        (api_base, requests, handle)
+    }
+
     #[test]
     fn resolves_configured_and_path_syncthing_executables() {
         let bin_dir = temporary_notes_dir("syncthing-bin");
@@ -2562,6 +2636,27 @@ mod tests {
         assert!(svg.contains("#111111"));
         assert!(!svg.contains(device_id));
         assert!(!svg.contains("apiKey"));
+    }
+
+    #[test]
+    fn event_polling_uses_fixed_filters_and_incremental_ids() {
+        assert!(syncthing_events_path(None).contains("since=0&limit=1&timeout=0"));
+        assert!(syncthing_events_path(Some(41)).contains("since=41&limit=64&timeout=2"));
+        assert!(syncthing_events_path(Some(41)).contains("DeviceConnected"));
+        assert!(syncthing_events_path(Some(41)).contains("FolderErrors"));
+
+        let (api_base, requests, server) = spawn_events_server();
+        let events = syncthing_events_at(&api_base, "events-key", Some(41)).unwrap();
+        server.join().unwrap();
+        let captured = requests.lock().unwrap();
+
+        assert_eq!(events[0]["id"], 42);
+        assert_eq!(events[0]["type"], "StateChanged");
+        assert_eq!(
+            captured[0].headers.get("x-api-key").map(String::as_str),
+            Some("events-key")
+        );
+        assert!(captured[0].path.starts_with("/rest/events?since=41"));
     }
 
     #[test]
