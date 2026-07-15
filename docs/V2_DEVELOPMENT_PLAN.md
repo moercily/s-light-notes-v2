@@ -45,7 +45,7 @@ The alpha config builds the macOS `.app` target only. DMG packaging remains defe
 - [x] Bundle Syncthing as the default desktop sidecar so normal users install only s-light notes.
 - [x] Store the sidecar identity, database, logs, and credentials outside the notes folder.
 
-Current status: the macOS Apple Silicon package includes Syncthing v2.1.2 and starts it automatically. The Rust backend owns its isolated config/data/log/runtime directories, persistent random API Key, loopback GUI/API port, P2P ports, first-run notes-folder binding, device-code pairing, health checks, and shutdown. Pairing validates and normalizes the remote device ID, requires a second confirmation, adds one device, shares only the default notes folder, and verifies or rolls back the transaction. Live packaged-app validation completed on 2026-07-15 while a separate system Syncthing instance was running. `SLIGHT_SYNCTHING_BIN` remains an explicit development override; QR display, events, Windows, Linux, and macOS Intel artifacts are still pending.
+Current status: the macOS Apple Silicon package includes Syncthing v2.1.2 and starts it automatically. The Rust backend owns its isolated config/data/log/runtime directories, persistent random API Key, loopback GUI/API port, P2P ports, first-run notes-folder binding, device-code pairing, health checks, and shutdown. Pairing validates and normalizes the remote device ID, requires a second confirmation, adds one device, shares only the default notes folder, and verifies or rolls back the transaction. The local device code can also be rendered as an offline QR image without exposing credentials. Live packaged-app validation completed on 2026-07-15 while a separate system Syncthing instance was running. `SLIGHT_SYNCTHING_BIN` remains an explicit development override; QR scanning, events, Windows, Linux, and macOS Intel artifacts are still pending.
 
 ### V2.3 Sidecar Product Decision
 
@@ -69,7 +69,8 @@ Current status: the macOS Apple Silicon package includes Syncthing v2.1.2 and st
 - [x] On first run, create and bind the default notes folder without exposing raw Syncthing configuration.
 - [x] Replace API address and API Key fields with a normal device-pairing wizard.
 - [x] Add device-code pairing, mutual confirmation, default-folder sharing, and understandable connection states.
-- [ ] Add an offline QR representation of the local device code and QR scanning where the platform permits it.
+- [x] Add an offline QR representation of the local device code.
+- [ ] Add QR scanning where the platform permits it, with manual code entry retained as the fallback.
 - [ ] Subscribe to Syncthing events for device, folder, scan, completion, conflict, and error updates.
 - [ ] Decide whether closing the window stops sync or leaves a tray/background process, and expose that as a clear setting.
 - [ ] Stop the sidecar cleanly before app updates and preserve its identity/configuration across upgrades.
@@ -98,8 +99,8 @@ Current status: the macOS Apple Silicon package includes Syncthing v2.1.2 and st
 
 ## Next Development Step
 
-- Add an offline QR representation to the completed device-code pairing wizard.
 - Add Syncthing event subscriptions for device, folder, scan, completion, conflict, and error updates.
+- Add QR scanning only after camera permission and desktop/mobile packaging boundaries are defined.
 - Validate executable discovery and startup on native Windows and Linux before packaging their sidecars.
 - Add and checksum macOS Intel, Windows x64, and Linux x64 sidecar artifacts.
 

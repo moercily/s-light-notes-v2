@@ -1,3 +1,5 @@
+use qrcode::render::svg;
+use qrcode::{EcLevel, QrCode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
@@ -1101,6 +1103,7 @@ fn take_pending_device_pairing(
 
 fn pairing_info_at(api_base: &str, api_key: &str) -> Result<serde_json::Value, String> {
     let local_device_id = local_device_id_at(api_base, api_key)?;
+    let local_device_qr_svg = device_id_qr_svg(&local_device_id)?;
     let devices = configured_devices_at(api_base, api_key)?;
     let connections = request_syncthing_json_at(
         api_base,
@@ -1121,11 +1124,24 @@ fn pairing_info_at(api_base: &str, api_key: &str) -> Result<serde_json::Value, S
     .unwrap_or_else(|_| serde_json::json!({}));
     Ok(serde_json::json!({
         "localDeviceId": local_device_id,
+        "localDeviceQrSvg": local_device_qr_svg,
         "folderId": SIDECAR_FOLDER_ID,
         "devices": devices,
         "connections": connections,
         "pendingDevices": pending_devices
     }))
+}
+
+fn device_id_qr_svg(device_id: &str) -> Result<String, String> {
+    let code = QrCode::with_error_correction_level(device_id.as_bytes(), EcLevel::M)
+        .map_err(|err| format!("无法生成本机设备二维码：{err}"))?;
+    Ok(code
+        .render::<svg::Color>()
+        .min_dimensions(256, 256)
+        .quiet_zone(true)
+        .dark_color(svg::Color("#111111"))
+        .light_color(svg::Color("#ffffff"))
+        .build())
 }
 
 #[tauri::command]
@@ -2535,6 +2551,17 @@ mod tests {
         assert_eq!(validate_device_name("   ").unwrap(), "另一台设备");
         assert!(validate_device_name(&"x".repeat(65)).is_err());
         assert!(normalize_device_id_at("http://127.0.0.1:1", "key", "short-code").is_err());
+    }
+
+    #[test]
+    fn device_id_qr_is_offline_svg_without_embedded_credentials() {
+        let device_id = "MFZWI3D-BONSGYC-YLTMRWG-C43ENR5-QXGZDMM-FZWI3DP-BONSGYY-LTMRWAD";
+        let svg = device_id_qr_svg(device_id).unwrap();
+
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("#111111"));
+        assert!(!svg.contains(device_id));
+        assert!(!svg.contains("apiKey"));
     }
 
     #[test]

@@ -470,7 +470,7 @@ body {
 
 .sync-device-code-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: stretch;
     gap: 6px;
     margin-top: 5px;
@@ -495,6 +495,25 @@ body {
     background: var(--bg-primary);
     color: var(--text-secondary);
     cursor: pointer;
+}
+
+.sync-device-qr {
+    display: grid;
+    place-items: center;
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    background: #ffffff;
+}
+
+.sync-device-qr.hidden {
+    display: none;
+}
+
+.sync-device-qr img {
+    display: block;
+    width: min(256px, 100%);
+    aspect-ratio: 1;
 }
 
 .sync-paired-devices {

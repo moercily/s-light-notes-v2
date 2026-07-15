@@ -16,7 +16,7 @@ s-light notes v2 is a P2P synced Markdown notes app. Notes remain ordinary `.md`
 - The app creates or selects a notes folder.
 - Desktop release packages include and automatically manage a Syncthing sidecar.
 - Normal users do not install, start, or manually configure a separate Syncthing application.
-- Device connection uses an in-app pairing flow instead of API addresses, ports, or API Keys.
+- Device connection uses an in-app device-code or QR pairing flow instead of API addresses, ports, or API Keys.
 - The app shows P2P sync status in a dedicated sync center.
 - The app keeps editing usable when Syncthing is unavailable.
 

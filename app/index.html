@@ -136,6 +136,10 @@
                 <div class="sync-device-code-row">
                     <code id="sync-local-device-id">等待同步引擎</code>
                     <button id="sync-copy-device-id" type="button" title="复制本机设备代码">复制</button>
+                    <button id="sync-toggle-device-qr" type="button" title="显示本机设备二维码" aria-expanded="false">二维码</button>
+                </div>
+                <div id="sync-local-device-qr" class="sync-device-qr hidden">
+                    <img id="sync-local-device-qr-image" alt="本机设备代码二维码">
                 </div>
                 <div id="sync-paired-devices" class="sync-paired-devices"></div>
                 <label class="sync-field">

@@ -22,6 +22,7 @@ const AppState = {
     desktopPaths: null,         // v2 桌面端默认目录信息
     pairingInfo: null,          // 内置同步引擎的设备配对状态
     pairingPreview: null,       // 等待用户二次确认的配对摘要
+    pairingQrUrl: null,         // 本机设备二维码的临时 Blob URL
 };
 
 // ========== 初始化 ==========
@@ -135,6 +136,7 @@ function bindEvents() {
     $('#sync-binding-confirm-cancel').addEventListener('click', closeSyncBindingConfirmation);
     $('#sync-binding-confirm-apply').addEventListener('click', onSyncConfirmBinding);
     $('#sync-copy-device-id').addEventListener('click', onCopyLocalDeviceId);
+    $('#sync-toggle-device-qr').addEventListener('click', onToggleLocalDeviceQr);
     $('#sync-preview-pairing').addEventListener('click', onPreviewDevicePairing);
     $('#sync-confirm-pairing').addEventListener('click', onConfirmDevicePairing);
     $('#sync-remember-key').addEventListener('change', updateSyncKeyWarning);
@@ -931,6 +933,7 @@ function renderPairingPanel() {
     localId.textContent = info && info.localDeviceId
         ? info.localDeviceId
         : '正在读取本机设备代码...';
+    renderLocalDeviceQr(info && info.localDeviceQrSvg);
     devicesContainer.innerHTML = '';
     if (!info || !Array.isArray(info.devices)) return;
 
@@ -962,6 +965,33 @@ function renderPairingPanel() {
         row.appendChild(state);
         devicesContainer.appendChild(row);
     });
+}
+
+function renderLocalDeviceQr(svgText) {
+    const image = $('#sync-local-device-qr-image');
+    const button = $('#sync-toggle-device-qr');
+    if (!image || !button) return;
+
+    if (AppState.pairingQrUrl) {
+        URL.revokeObjectURL(AppState.pairingQrUrl);
+        AppState.pairingQrUrl = null;
+    }
+    image.removeAttribute('src');
+    button.disabled = !svgText;
+    if (!svgText) return;
+
+    AppState.pairingQrUrl = URL.createObjectURL(new Blob([svgText], { type: 'image/svg+xml' }));
+    image.src = AppState.pairingQrUrl;
+}
+
+function onToggleLocalDeviceQr() {
+    const container = $('#sync-local-device-qr');
+    const button = $('#sync-toggle-device-qr');
+    if (!container || !button || button.disabled) return;
+    const willShow = container.classList.contains('hidden');
+    container.classList.toggle('hidden', !willShow);
+    button.setAttribute('aria-expanded', String(willShow));
+    button.textContent = willShow ? '收起二维码' : '二维码';
 }
 
 async function onCopyLocalDeviceId() {

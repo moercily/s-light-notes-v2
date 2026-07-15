@@ -71,6 +71,8 @@ macOS Apple Silicon packaged-app validation passed on 2026-07-15: the bundle con
 - Device and folder configuration are read back after writing; a failed share or verification triggers rollback.
 - A configured but disconnected remote device is shown as waiting for confirmation; a live connection is shown as connected.
 - Pairing Tauri invocations contain no API Key, arbitrary folder path, device address, or raw Syncthing configuration.
+- Offline QR generation contains only the canonical local device ID and no API Key, folder path, note content, or network address.
+- QR display expands and collapses without overflow at desktop and 390px mobile viewport widths; manual copy remains available.
 
 ## External Syncthing Manual Tests
 
