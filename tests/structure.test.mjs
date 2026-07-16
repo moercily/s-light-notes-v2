@@ -18,8 +18,10 @@ const v2MustExist = [
   'app/js/sync-center.js',
   'app/js/sync-service.js',
   'src-tauri/tauri.conf.json',
+  'src-tauri/icons/icon.ico',
   'src-tauri/binaries/SYNCTHING_SIDECAR.json',
   'src-tauri/binaries/syncthing-sidecar-aarch64-apple-darwin',
+  'src-tauri/binaries/syncthing-sidecar-x86_64-pc-windows-msvc.exe',
   'src-tauri/binaries/notices/SYNCTHING_LICENSE.txt',
   'docs/V2_DEVELOPMENT_PLAN.md',
   'tests/sync-service.test.mjs',
@@ -35,6 +37,12 @@ for (const path of v2MustExist) {
 }
 
 const tauriConfig = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
+assert.equal(
+  packageJson.scripts['tauri:build:windows'],
+  'tauri build --bundles nsis',
+  'Windows releases should use the explicit NSIS package target'
+);
 assert.equal(
   tauriConfig.app.withGlobalTauri,
   true,
@@ -48,12 +56,15 @@ assert.deepEqual(
 
 const sidecarMetadata = JSON.parse(readFileSync('src-tauri/binaries/SYNCTHING_SIDECAR.json', 'utf8'));
 assert.equal(sidecarMetadata.version, 'v2.1.2');
-assert.equal(sidecarMetadata.binary.target, 'aarch64-apple-darwin');
 assert.equal(sidecarMetadata.compatibility.syncthingConfigVersion, 52);
-const sidecarHash = createHash('sha256')
-  .update(readFileSync('src-tauri/binaries/syncthing-sidecar-aarch64-apple-darwin'))
-  .digest('hex');
-assert.equal(sidecarHash, sidecarMetadata.binary.sha256, 'bundled sidecar should match pinned metadata');
+for (const target of ['aarch64-apple-darwin', 'x86_64-pc-windows-msvc']) {
+  const artifact = sidecarMetadata.artifacts[target];
+  assert.ok(artifact, `${target} sidecar metadata should exist`);
+  const sidecarHash = createHash('sha256')
+    .update(readFileSync(`src-tauri/binaries/${artifact.binary.name}`))
+    .digest('hex');
+  assert.equal(sidecarHash, artifact.binary.sha256, `${target} sidecar should match pinned metadata`);
+}
 assert.deepEqual(
   tauriConfig.bundle.resources,
   ['binaries/SYNCTHING_SIDECAR.json', 'binaries/notices/SYNCTHING_LICENSE.txt'],

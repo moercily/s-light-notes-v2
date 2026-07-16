@@ -97,18 +97,20 @@ Exit condition: all items pass on the packaged macOS Apple Silicon application a
 
 Build and test on the native operating system. Cross-compilation is not accepted as the only verification path.
 
-- `[ ]` Windows x64: install Rust, Node.js, Tauri prerequisites, and WebView2 requirements.
-- `[ ]` Windows x64: run frontend tests, Rust tests, and Tauri build.
+- `[x]` Windows x64: install Rust, Node.js, Tauri prerequisites, and WebView2 requirements.
+- `[x]` Windows x64: run frontend tests, Rust tests, and Tauri build.
 - `[ ]` Windows x64: install the generated package and run the desktop Markdown loop.
 - `[ ]` Linux x64: install GTK/WebKit/Tauri prerequisites and run frontend tests, Rust tests, and Tauri build.
 - `[ ]` Linux x64: install the generated package and run the desktop Markdown loop.
 - `[ ]` macOS Intel: build and run the desktop package on native hardware or an approved native CI runner.
 
+Windows checkpoint (2026-07-16): Parallels Windows 11 ARM64 used the x64 Node and `x86_64-pc-windows-msvc` Rust toolchains plus the installed Visual Studio x64 C++ workload. Frontend tests, all 31 Rust tests, the x64 release build, NSIS packaging, installation, launch, sidecar health, normal-exit cleanup, and identity persistence passed under Windows x64 emulation. The interactive Markdown loop and native x64 hardware coverage remain pending.
+
 ### 6.2 Sidecar Artifacts
 
 - `[x]` macOS Apple Silicon: `aarch64-apple-darwin` proof completed.
 - `[ ]` macOS Intel: add and verify `x86_64-apple-darwin`.
-- `[ ]` Windows x64: add and verify `x86_64-pc-windows-msvc` with the executable suffix required by Tauri.
+- `[x]` Windows x64: add and verify `x86_64-pc-windows-msvc` with the executable suffix required by Tauri.
 - `[ ]` Linux x64: add and verify `x86_64-unknown-linux-gnu`.
 - `[ ]` Record the exact Syncthing version, source URL, checksum, license notice, and target triple for every artifact.
 - `[ ]` Verify each package starts its sidecar with an isolated application-data directory and the correct loopback/API/P2P ports.
@@ -199,7 +201,8 @@ Mobile exit condition: at least one platform has an installable client with a do
 
 ## 10. Phase V2.6: Release and Update Engineering
 
-- `[ ]` Select Windows installer format and Linux package formats.
+- `[x]` Select NSIS as the first Windows installer format and provide `npm run tauri:build:windows`.
+- `[ ]` Select Linux package formats.
 - `[ ]` Add macOS Intel, Windows, and Linux artifact checksums to the release process.
 - `[ ]` Add code signing/notarization requirements for supported desktop platforms.
 - `[ ]` Add an updater only after package installation and sidecar migration are stable.
@@ -222,12 +225,11 @@ Mobile exit condition: at least one platform has an installable client with a do
 The next implementation sessions should use this order:
 
 1. Complete macOS packaged-app Markdown smoke testing.
-2. Build the Windows package inside the Windows virtual machine and record failures.
-3. Add the Windows sidecar artifact and repeat the Windows package test.
-4. Build and validate the Linux package and sidecar artifact.
-5. Run the first real two-desktop LAN synchronization test.
-6. Record conflict behavior before changing the conflict UI.
-7. Choose the Android and iOS packaging route based on real file-access constraints.
+2. Complete the Windows packaged-app Markdown smoke test and repeat it on native x64 hardware when available.
+3. Build and validate the Linux package and sidecar artifact.
+4. Run the first real two-desktop LAN synchronization test.
+5. Record conflict behavior before changing the conflict UI.
+6. Choose the Android and iOS packaging route based on real file-access constraints.
 
 ## 13. Change and Commit Rules
 

@@ -35,6 +35,7 @@
       "binaries/notices/SYNCTHING_LICENSE.txt"
     ],
     "icon": [
+      "icons/icon.ico",
       "../app/icons/icon-192.png",
       "../app/icons/icon-512.png"
     ]

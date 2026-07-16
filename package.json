@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node tests/structure.test.mjs && node tests/desktop-service.test.mjs && node tests/desktop-storage.test.mjs && node tests/sync-service.test.mjs && node tests/sync-center.test.mjs",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "tauri:build:windows": "tauri build --bundles nsis"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

@@ -81,6 +81,28 @@ Manual acceptance run:
 
 All six manual steps above were reported as passed on 2026-07-15. Phase 5.1 remains open only for the separate editing-without-sidecar check.
 
+### Windows x64 Package Checkpoint - 2026-07-16
+
+Verified in Parallels Windows 11 ARM64 using Windows x64 application emulation:
+
+- Node.js v22.22.0 x64, Rust 1.97.0 with `x86_64-pc-windows-msvc`, Visual Studio 2022 x64 C++ tools, the Windows 11 SDK, and WebView2 were available.
+- The frontend suite passed and all 31 Rust tests passed on Windows.
+- The first Rust build correctly exposed the missing Windows sidecar, and the next build exposed the required Windows `.ico`; both package gaps were added to the repository and covered by the structure test.
+- `syncthing-windows-amd64-v2.1.2.zip` matched SHA-256 `4626c13012e9620ece2393bfc3300aeafead654695d5dc096a873c27a7543c96` from Syncthing's official signed checksum manifest.
+- The extracted x86-64 PE sidecar matched SHA-256 `6bff9bbf005ea28f103da7a6508f2677bdd15bd344faf4b7f908872c83d76e3e`.
+- The final `npm run tauri:build:windows` NSIS x64 installer was generated, installed per user, and registered an uninstall entry. It was 12,858,947 bytes with SHA-256 `c489c18e86632eed22deae4c6f79dc476163b1d23234a171c42d847c9328a5d2`.
+- The installed directory contained the main executable, `syncthing-sidecar.exe`, provenance metadata, and the MPL-2.0 notice.
+- First launch created `Documents\\s-light-notes` and an independent application-data tree containing Syncthing config, data, logs, and runtime credentials.
+- The installed sidecar returned `{"status":"OK"}` on loopback port 8385.
+- A normal main-window close stopped the app and both sidecar processes and released port 8385.
+- Restart restored sidecar health and preserved the Syncthing certificate and private-key hashes.
+
+Pending Windows acceptance:
+
+- Run the create/edit/save/reopen, external-file edit, trash/restore/permanent-delete, and no-browser-permission-picker checks in the installed UI.
+- Confirm the normal UI exposes no raw Syncthing API address, port, or API Key.
+- Repeat packaging and smoke testing on native Windows x64 hardware or an approved native x64 runner; the current ARM64 VM proves x64 compatibility behavior, not native x64 hardware coverage.
+
 ## Bundled Sidecar Tests
 
 macOS Apple Silicon packaged-app validation passed on 2026-07-15: the bundle contained the pinned arm64 binary, automatically started it beside an existing system Syncthing instance, used isolated ports and app data, created the default folder binding, preserved a private backend credential, and stopped the sidecar when the app closed.
