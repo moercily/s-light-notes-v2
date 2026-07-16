@@ -38,6 +38,12 @@ for (const path of v2MustExist) {
 
 const tauriConfig = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
+const tauriMain = readFileSync('src-tauri/src/main.rs', 'utf8');
+assert.match(
+  tauriMain,
+  /#!\[cfg_attr\(not\(debug_assertions\), windows_subsystem = "windows"\)\]/,
+  'Windows release builds should not open a console window'
+);
 assert.equal(
   packageJson.scripts['tauri:build:windows'],
   'tauri build --bundles nsis',

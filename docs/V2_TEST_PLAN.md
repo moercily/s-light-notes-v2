@@ -90,10 +90,11 @@ Verified in Parallels Windows 11 ARM64 using Windows x64 application emulation:
 - The first Rust build correctly exposed the missing Windows sidecar, and the next build exposed the required Windows `.ico`; both package gaps were added to the repository and covered by the structure test.
 - `syncthing-windows-amd64-v2.1.2.zip` matched SHA-256 `4626c13012e9620ece2393bfc3300aeafead654695d5dc096a873c27a7543c96` from Syncthing's official signed checksum manifest.
 - The extracted x86-64 PE sidecar matched SHA-256 `6bff9bbf005ea28f103da7a6508f2677bdd15bd344faf4b7f908872c83d76e3e`.
-- The final `npm run tauri:build:windows` NSIS x64 installer was generated, installed per user, and registered an uninstall entry. It was 12,858,947 bytes with SHA-256 `c489c18e86632eed22deae4c6f79dc476163b1d23234a171c42d847c9328a5d2`.
+- The final `npm run tauri:build:windows` NSIS x64 installer was generated, installed per user, and registered an uninstall entry. After the console-window fix it was 12,858,947 bytes with SHA-256 `f8db9e206b07391c45bbadb125ca4ca85c16745a6de28877678fdfd7a21924fc`.
 - The installed directory contained the main executable, `syncthing-sidecar.exe`, provenance metadata, and the MPL-2.0 notice.
 - First launch created `Documents\\s-light-notes` and an independent application-data tree containing Syncthing config, data, logs, and runtime credentials.
 - The installed sidecar returned `{"status":"OK"}` on loopback port 8385.
+- A reported empty command window was traced to the main release executable using the Windows console subsystem. Release builds now use the Windows GUI subsystem while debug builds retain their console, and the installed executable was verified with PE subsystem value `2`.
 - A normal main-window close stopped the app and both sidecar processes and released port 8385.
 - Restart restored sidecar health and preserved the Syncthing certificate and private-key hashes.
 
