@@ -127,6 +127,15 @@ assert.deepEqual(
 );
 
 const desktopHtml = readFileSync('app/index.html', 'utf8');
+const mobileHtml = readFileSync('app/mobile.html', 'utf8');
+const mobileCss = readFileSync('app/css/mobile.css', 'utf8');
+const mobileJs = readFileSync('app/js/mobile.js', 'utf8');
+assert.doesNotMatch(desktopHtml, /mobile\.css|mobile\.js|mobile-storage-service\.js/);
+assert.match(mobileHtml, /mobile-storage-service\.js/);
+assert.match(mobileCss, /@media \(max-width: 340px\)/);
+assert.match(mobileCss, /orientation: landscape/);
+assert.match(mobileJs, /history\.pushState/);
+assert.match(mobileJs, /window\.addEventListener\('popstate'/);
 for (const id of [
   'sync-advanced-connection',
   'sync-binding-panel',

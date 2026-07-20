@@ -14,12 +14,14 @@ const AppState = {
     _theme: null,
     _lastSavedTime: null,
     _installPrompt: null,
+    _view: 'list',
 };
 
 async function initMobileApp() {
     initMobileTheme();
     bindMobileEvents();
     initMobileViewport();
+    initMobileNavigation();
 
     try {
         if (window.mobileStorageService && window.mobileStorageService.isAvailable()) {
@@ -42,7 +44,7 @@ function bindMobileEvents() {
     $('#mobile-new-note').addEventListener('click', onMobileNewNote);
     $('#mobile-back').addEventListener('click', onMobileBackToList);
     $('#mobile-settings').addEventListener('click', () => showMobileView('settings'));
-    $('#mobile-settings-back').addEventListener('click', () => showMobileView('list'));
+    $('#mobile-settings-back').addEventListener('click', navigateMobileBack);
     $('#mobile-search').addEventListener('input', (e) => {
         AppState.searchQuery = e.target.value;
         renderMobileNotes();
@@ -76,9 +78,33 @@ async function onMobileVisibilityChange() {
     }
 }
 
-function showMobileView(name) {
+function initMobileNavigation() {
+    history.replaceState({ mobileView: 'list' }, '', location.href);
+    window.addEventListener('popstate', async (event) => {
+        const name = event.state && event.state.mobileView ? event.state.mobileView : 'list';
+        if (AppState._view === 'editor' && AppState.isDirty) {
+            await saveMobileCurrentNote();
+        }
+        activateMobileView(name);
+        if (name === 'list') await refreshMobileNotes();
+    });
+}
+
+function activateMobileView(name) {
     $$('.mobile-view').forEach(view => view.classList.remove('active'));
     $('#mobile-' + name + '-view').classList.add('active');
+    AppState._view = name;
+}
+
+function showMobileView(name) {
+    if (AppState._view === name) return;
+    activateMobileView(name);
+    history.pushState({ mobileView: name }, '', location.href);
+}
+
+function navigateMobileBack() {
+    if (AppState._view === 'list') return;
+    history.back();
 }
 
 async function refreshMobileNotes() {
@@ -176,7 +202,7 @@ async function onMobileNewNote() {
 async function onMobileBackToList() {
     if (AppState.isDirty) await saveMobileCurrentNote();
     await refreshMobileNotes();
-    showMobileView('list');
+    navigateMobileBack();
 }
 
 function onMobileEditorInput() {
@@ -219,7 +245,7 @@ function getMobileEditorContent() {
 async function onMobileDeleteCurrent() {
     if (!AppState.currentNoteId) {
         $('#mobile-note-editor').innerHTML = '';
-        showMobileView('list');
+        navigateMobileBack();
         return;
     }
 
@@ -229,7 +255,7 @@ async function onMobileDeleteCurrent() {
     AppState.isDirty = false;
     $('#mobile-note-editor').innerHTML = '';
     await refreshMobileNotes();
-    showMobileView('list');
+    navigateMobileBack();
 }
 
 async function onMobileToggleTrash() {

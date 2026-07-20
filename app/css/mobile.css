@@ -20,12 +20,12 @@
 }
 
 [data-theme="dark"] {
-    --bg-primary: #1e1e2e;
-    --bg-secondary: #252536;
-    --text-primary: #e0e0e0;
-    --text-secondary: #a0a0b0;
-    --text-muted: #707080;
-    --border-color: #3a3a4a;
+    --bg-primary: #17191c;
+    --bg-secondary: #22252a;
+    --text-primary: #f0f1f2;
+    --text-secondary: #b3b7bc;
+    --text-muted: #858b92;
+    --border-color: #3a3f46;
     --accent: #6cb4f0;
     --accent-hover: #8ec8f4;
     --note-active: #2a3a50;
@@ -49,8 +49,6 @@ html, body {
 
 body {
     min-height: var(--mobile-viewport-height);
-    padding: env(safe-area-inset-top) env(safe-area-inset-right)
-             env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 button, input {
@@ -63,7 +61,8 @@ button {
 }
 
 #mobile-app {
-    height: calc(var(--mobile-viewport-height) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    width: 100%;
+    height: var(--mobile-viewport-height);
     min-height: 0;
     background: var(--bg-primary);
 }
@@ -83,8 +82,10 @@ button {
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 56px;
-    padding: 8px 14px;
+    min-height: calc(56px + env(safe-area-inset-top));
+    padding: calc(8px + env(safe-area-inset-top))
+             calc(14px + env(safe-area-inset-right)) 8px
+             calc(14px + env(safe-area-inset-left));
     border-bottom: 1px solid var(--border-color);
     background: var(--bg-secondary);
     flex-shrink: 0;
@@ -107,6 +108,16 @@ button {
     background: var(--bg-primary);
     color: var(--text-primary);
     padding: 0 12px;
+}
+
+.icon-button:focus-visible,
+.text-button:focus-visible,
+.settings-item:focus-visible,
+#mobile-format-bar button:focus-visible,
+.mobile-trash-actions button:focus-visible,
+#mobile-search:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 .icon-button {
@@ -139,7 +150,8 @@ button {
 }
 
 .mobile-search-row {
-    padding: 10px 14px;
+    padding: 10px calc(14px + env(safe-area-inset-right)) 10px
+             calc(14px + env(safe-area-inset-left));
     border-bottom: 1px solid var(--border-color);
 }
 
@@ -160,7 +172,8 @@ button {
     min-height: 0;
     overflow-y: auto;
     list-style: none;
-    padding: 6px 0 92px;
+    padding: 6px env(safe-area-inset-right)
+             calc(92px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
 }
 
 .mobile-note-item {
@@ -246,7 +259,9 @@ button {
 
 #mobile-note-editor {
     min-height: 100%;
-    padding: 18px 18px calc(var(--mobile-format-bar-height) + 24px);
+    padding: 18px calc(18px + env(safe-area-inset-right))
+             calc(var(--mobile-format-bar-height) + 24px)
+             calc(18px + env(safe-area-inset-left));
     outline: none;
     font-size: 16px;
     line-height: 1.8;
@@ -285,7 +300,9 @@ button {
     display: flex;
     gap: 8px;
     min-height: var(--mobile-format-bar-height);
-    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    padding: 8px calc(12px + env(safe-area-inset-right))
+             calc(8px + env(safe-area-inset-bottom))
+             calc(12px + env(safe-area-inset-left));
     border-top: 1px solid var(--border-color);
     background: var(--bg-secondary);
     flex-shrink: 0;
@@ -301,10 +318,55 @@ button {
 }
 
 .settings-list {
-    padding: 14px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 14px calc(14px + env(safe-area-inset-right))
+             calc(14px + env(safe-area-inset-bottom))
+             calc(14px + env(safe-area-inset-left));
     display: flex;
     flex-direction: column;
     gap: 10px;
+}
+
+@media (max-width: 340px) {
+    .mobile-topbar {
+        gap: 6px;
+        padding-right: calc(8px + env(safe-area-inset-right));
+        padding-left: calc(8px + env(safe-area-inset-left));
+    }
+
+    .text-button {
+        padding: 0 8px;
+    }
+
+    #mobile-format-bar {
+        gap: 4px;
+        padding-right: calc(8px + env(safe-area-inset-right));
+        padding-left: calc(8px + env(safe-area-inset-left));
+    }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+    :root {
+        --mobile-format-bar-height: 52px;
+    }
+
+    .mobile-topbar {
+        min-height: calc(48px + env(safe-area-inset-top));
+        padding-top: calc(4px + env(safe-area-inset-top));
+        padding-bottom: 4px;
+    }
+
+    #mobile-note-editor {
+        padding-top: 12px;
+        line-height: 1.65;
+    }
+
+    #mobile-format-bar {
+        padding-top: 4px;
+        padding-bottom: calc(4px + env(safe-area-inset-bottom));
+    }
 }
 
 .settings-item {

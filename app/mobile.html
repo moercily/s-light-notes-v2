@@ -19,7 +19,7 @@
         <section id="mobile-list-view" class="mobile-view active" aria-label="笔记列表">
             <header class="mobile-topbar">
                 <h1 id="mobile-list-title">s-light notes</h1>
-                <button id="mobile-settings" class="icon-button" title="设置">☰</button>
+                <button id="mobile-settings" class="icon-button" title="设置" aria-label="设置">☰</button>
             </header>
             <div class="mobile-search-row">
                 <input type="search" id="mobile-search" placeholder="搜索笔记">
@@ -27,7 +27,7 @@
             <ul id="mobile-note-list" class="mobile-note-list">
                 <li class="mobile-empty">暂无笔记</li>
             </ul>
-            <button id="mobile-new-note" class="primary-fab" title="新建笔记">+</button>
+            <button id="mobile-new-note" class="primary-fab" title="新建笔记" aria-label="新建笔记">+</button>
         </section>
 
         <section id="mobile-editor-view" class="mobile-view" aria-label="编辑笔记">
@@ -37,7 +37,7 @@
                     <strong id="mobile-note-title">新建笔记</strong>
                     <span id="mobile-save-status">就绪</span>
                 </div>
-                <button id="mobile-delete-note" class="icon-button danger" title="删除笔记">删</button>
+                <button id="mobile-delete-note" class="icon-button danger" title="删除笔记" aria-label="删除笔记">删</button>
             </header>
             <div id="mobile-editor-scroll">
                 <div id="mobile-note-editor"
@@ -46,11 +46,11 @@
                 </div>
             </div>
             <div id="mobile-format-bar" aria-label="格式工具栏">
-                <button data-format="bold"><strong>B</strong></button>
-                <button data-format="italic"><em>I</em></button>
-                <button data-format="heading">H</button>
-                <button data-format="list">☰</button>
-                <button data-format="link">🔗</button>
+                <button data-format="bold" title="粗体" aria-label="粗体"><strong>B</strong></button>
+                <button data-format="italic" title="斜体" aria-label="斜体"><em>I</em></button>
+                <button data-format="heading" title="标题" aria-label="标题">H</button>
+                <button data-format="list" title="列表" aria-label="列表">☰</button>
+                <button data-format="link" title="链接" aria-label="链接">🔗</button>
             </div>
         </section>
 
