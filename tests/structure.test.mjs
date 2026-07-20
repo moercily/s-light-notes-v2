@@ -18,6 +18,9 @@ const v2MustExist = [
   'app/js/sync-center.js',
   'app/js/sync-service.js',
   'src-tauri/tauri.conf.json',
+  'src-tauri/tauri.android.conf.json',
+  'src-tauri/gen/android/app/build.gradle.kts',
+  'src-tauri/gen/android/app/src/main/AndroidManifest.xml',
   'src-tauri/icons/icon.ico',
   'src-tauri/binaries/SYNCTHING_SIDECAR.json',
   'src-tauri/binaries/syncthing-sidecar-aarch64-apple-darwin',
@@ -39,8 +42,14 @@ for (const path of v2MustExist) {
 }
 
 const tauriConfig = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+const androidConfig = JSON.parse(readFileSync('src-tauri/tauri.android.conf.json', 'utf8'));
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 const tauriMain = readFileSync('src-tauri/src/main.rs', 'utf8');
+const androidBuild = readFileSync('src-tauri/gen/android/app/build.gradle.kts', 'utf8');
+const androidManifest = readFileSync(
+  'src-tauri/gen/android/app/src/main/AndroidManifest.xml',
+  'utf8'
+);
 assert.match(
   tauriMain,
   /#!\[cfg_attr\(not\(debug_assertions\), windows_subsystem = "windows"\)\]/,
@@ -71,6 +80,14 @@ assert.deepEqual(
   ['binaries/syncthing-sidecar'],
   'desktop packages should bundle Syncthing through Tauri externalBin'
 );
+assert.equal(androidConfig.app.windows[0].url, 'mobile.html');
+assert.deepEqual(androidConfig.bundle.externalBin, []);
+assert.deepEqual(androidConfig.bundle.resources, []);
+assert.equal(androidConfig.bundle.android.minSdkVersion, 26);
+assert.match(androidBuild, /compileSdk = 36/);
+assert.match(androidBuild, /minSdk = 26/);
+assert.match(androidBuild, /targetSdk = 36/);
+assert.doesNotMatch(androidManifest, /LEANBACK_LAUNCHER|android\.software\.leanback/);
 
 const sidecarMetadata = JSON.parse(readFileSync('src-tauri/binaries/SYNCTHING_SIDECAR.json', 'utf8'));
 assert.equal(sidecarMetadata.version, 'v2.1.2');

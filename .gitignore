@@ -6,7 +6,9 @@
 # Local dependencies and build output
 node_modules/
 src-tauri/target/
-src-tauri/gen/
+src-tauri/gen/*
+!src-tauri/gen/android/
+!src-tauri/gen/android/**
 
 # Local environment and editor files
 .env
