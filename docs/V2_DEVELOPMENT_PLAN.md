@@ -39,6 +39,8 @@ Known release gaps:
 - Android and iOS installable clients have not been created.
 - Automatic installer/updater integration has not been created.
 
+Current implementation focus (2026-07-20): Android is the highest-priority delivery track. Work is isolated on `codex/android-v2`; the first user-testable APK must include in-app P2P synchronization rather than only an offline editor.
+
 ## 3. Product Release Target
 
 The first usable v2 desktop release must allow a non-technical user to:
@@ -57,15 +59,15 @@ The first mobile release is a compatibility milestone, not a promise of identica
 
 Work must follow this order:
 
-1. Finish macOS desktop smoke coverage.
-2. Build and validate Windows and Linux desktop packages.
-3. Add the missing desktop sidecar artifacts.
-4. Validate real two-device synchronization and conflicts.
-5. Define and prototype the mobile packaging route.
-6. Add platform-specific QR scanning and mobile synchronization.
-7. Add signed installers, update migration, and release automation.
+1. Preserve the existing desktop regression gate while Android work is isolated on `codex/android-v2`.
+2. Initialize a Tauri Android project targeting API 36 with API 26 as the minimum.
+3. Add native Markdown storage and the dedicated mobile shell without changing the desktop entry.
+4. Build and manage a pinned Syncthing v2.1.2 Android engine inside the application.
+5. Complete Android pairing, QR scanning, bounded background synchronization, and real-device P2P tests.
+6. Resume remaining Windows, Linux, macOS Intel, and two-desktop acceptance work after the Android test APK is usable.
+7. Add signed installers, update migration, and release automation after platform behavior is stable.
 
-Mobile packaging and update work must not be used to mask unfinished desktop synchronization behavior.
+Android work must not weaken the desktop tests, expose Syncthing credentials, or reuse a desktop sidecar binary.
 
 ## 5. Phase V2.1: Desktop Alpha Completion
 
@@ -182,12 +184,26 @@ QR scanning is blocked until the mobile shell and permission model are selected.
 
 ### 9.2 Android Native Route
 
-- `[ ]` Choose between a Tauri mobile shell with a native Syncthing integration and an external Syncthing-Fork compatibility route.
+- `[x]` Select a Tauri mobile shell with an in-app Syncthing engine; Syncthing-Fork is a build/lifecycle reference only.
 - `[ ]` Create an Android project or Tauri Android target without reusing the desktop sidecar binary.
-- `[ ]` Implement storage permissions and a foreground-service lifecycle if an embedded engine is selected.
-- `[ ]` Define battery-restriction, process-recovery, and notification behavior.
+- `[ ]` Target Android 16/API 36, minimum API 26, and the `arm64-v8a` and `x86_64` ABIs using NDK 28 or newer.
+- `[ ]` Store real Markdown files in an application-owned directory and expose only notes through an Android `DocumentsProvider`.
+- `[ ]` Build pinned Syncthing v2.1.2 Android native artifacts with recorded source, checksums, license, ABI, and 16 KB page compatibility.
+- `[ ]` Implement foreground-service lifecycle, bounded WorkManager synchronization, notification handling, and API 35+ timeout cleanup.
+- `[ ]` Keep foreground editing usable when notification, camera, or background execution permission is unavailable.
+- `[ ]` Add offline QR scanning with manual device-code fallback and preserve preview/confirmation/rollback rules.
 - `[ ]` Pair Android with a desktop device and validate create/update/offline/conflict flows.
 - `[ ]` Document the behavior when the user force-stops the Android synchronization service.
+
+Android branch and delivery policy:
+
+- Implementation branch: `codex/android-v2`, created from v2 `main` at `8b461ff`.
+- The first commit updates the four active v2 documents only; Android project generation begins after that commit.
+- Intermediate APKs are internal validation artifacts. The first user handoff requires working P2P sync on a connected arm64 device.
+- The first handoff uses a debug APK installed with ADB. Release signing and store submission follow functional acceptance.
+- The branch is not merged into `main` until Android P2P, conflicts, lifecycle, permissions, and desktop regression gates pass.
+
+Android exit condition: an API 36 emulator and a connected arm64 device can install the app; the device can edit offline, expose Markdown through the system file picker, pair with a desktop, sync both directions, recover after reconnect, show conflict copies, and stop synchronization after force-stop.
 
 ### 9.3 iOS Native Route
 
@@ -225,12 +241,12 @@ Mobile exit condition: at least one platform has an installable client with a do
 
 The next implementation sessions should use this order:
 
-1. Complete macOS packaged-app Markdown smoke testing.
-2. Complete the Windows packaged-app Markdown smoke test and repeat it on native x64 hardware when available.
-3. Build and validate the Linux package and sidecar artifact.
-4. Run the first real two-desktop LAN synchronization test.
-5. Record conflict behavior before changing the conflict UI.
-6. Choose the Android and iOS packaging route based on real file-access constraints.
+1. Commit the Android requirements, architecture, development, and test-plan updates on `codex/android-v2`.
+2. Install the Android SDK/NDK/Rust prerequisites and initialize the Tauri Android target.
+3. Separate desktop and Android configuration and prove desktop regression gates still pass.
+4. Add Android native Markdown storage, `DocumentsProvider`, and the dedicated mobile interface.
+5. Build the pinned Android Syncthing engine and add its foreground-service lifecycle.
+6. Add Android pairing, QR scanning, background policy, and real Android-to-desktop tests.
 
 ## 13. Change and Commit Rules
 

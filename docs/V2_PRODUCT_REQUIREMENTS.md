@@ -25,7 +25,11 @@ s-light notes v2 is a P2P synced Markdown notes app. Notes remain ordinary `.md`
 
 - Desktop is the primary v2 platform: macOS, Windows, and Linux through Tauri with a bundled Syncthing sidecar.
 - Desktop alpha does not silently remain in the tray or background after the user quits the app.
-- Android targets an in-app Syncthing engine managed by an Android foreground service; Syncthing-Fork remains a compatibility/testing reference.
+- Android is the current highest-priority delivery platform and targets an in-app Syncthing engine managed by an Android foreground service; Syncthing-Fork remains a compatibility/testing reference only.
+- Android targets API 36 with API 26 as its minimum and initially supports arm64 physical devices plus x86-64 emulators.
+- Android stores real Markdown files in an application-owned directory and exposes only note files through the system document picker. It does not request broad all-files access.
+- Android foreground sync is user-visible and bounded by current platform limits. The app does not promise continuous all-day background execution or start a data-sync foreground service at boot.
+- Android remains editable when the engine is stopped or camera, notification, and background execution access is unavailable.
 - iOS may embed an adapted Syncthing engine, but only promises foreground and opportunistic background synchronization.
 - Möbius Sync or file import/export remains an iOS fallback until the in-app engine is validated.
 
@@ -47,3 +51,8 @@ s-light notes v2 is a P2P synced Markdown notes app. Notes remain ordinary `.md`
 - Notes are still readable as Markdown files outside the app.
 - Syncthing status failures are visible and do not block local editing.
 - Conflict files are visible as conflicts, not mixed silently into normal notes.
+- The first Android test APK includes in-app P2P sync, not only offline IndexedDB storage.
+- Android can pair with a packaged desktop without exposing API addresses, ports, API Keys, or raw configuration.
+- Android and desktop can exchange Markdown in both directions, recover after offline edits, and preserve conflict copies.
+- Android notes are visible through the system file picker while Syncthing identity, configuration, database, logs, and credentials remain private.
+- Force-stopping Android stops synchronization; reopening the app restores the managed engine without changing its device identity.

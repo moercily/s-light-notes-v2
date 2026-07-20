@@ -182,8 +182,18 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 
 ## Mobile Tests
 
-- Android validates the in-app engine lifecycle, foreground-service notification, battery restrictions, storage permissions, and process recovery.
+- Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
+- Android emulator gate: install and launch on an API 36 x86-64 image; verify 320px-430px layout, safe areas, keyboard, rotation, Android back handling, and no horizontal overflow.
+- Android storage gate: create, save, reopen, trash, restore, permanently delete, and externally read/edit Markdown through the system `DocumentsProvider`.
+- Android fallback gate: native-storage initialization failures are visible and do not silently move Tauri notes into IndexedDB; PWA continues to use IndexedDB normally.
+- Android engine gate: verify pinned source metadata, ABI hashes, 16 KB page compatibility, isolated identity/config/data/log paths, fixed loopback API, and no desktop sidecar in the APK.
+- Android lifecycle gate: verify foreground start, visible notification, notification stop action, graceful shutdown, early exit, API 35+ timeout handling, and no boot-started data-sync service.
+- Android permission gate: camera denial preserves manual pairing; notification denial preserves foreground sync; battery restrictions and force-stop produce clear recoverable states.
+- Android background gate: WorkManager performs bounded best-effort sync on an unmetered network and does not keep an undocumented daemon alive.
+- Android P2P gate: pair a connected arm64 phone with a packaged desktop, exchange notes in both directions, edit while offline, reconnect, preserve identity, and retain Syncthing conflict copies.
+- Android security gate: normal UI and JavaScript contain no API Key, raw config, arbitrary note path, management port, or LAN-exposed REST endpoint.
+- Android regression gate: run `npm test`, all Rust tests, the macOS desktop build, and the Android build before the first user APK handoff.
 - iOS validates foreground sync, opportunistic background tasks, suspended-state recovery, and clear last-sync status.
-- Android also verifies compatibility with a Syncthing-Fork synchronized folder during migration.
+- Syncthing-Fork is used only as an optional behavior/build reference; the Android APK must not depend on or launch it.
 - iOS keeps Möbius Sync or import/export as a fallback until the embedded engine is release-ready.
 - Mobile UI does not depend on desktop-only Tauri commands.

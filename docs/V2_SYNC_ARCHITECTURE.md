@@ -2,7 +2,7 @@
 
 ## Overview
 
-v2 keeps Syncthing as the sync engine and adds a desktop backend that makes it feel native. The app manages local status, safe proxying, scan requests, and configuration previews while Syncthing handles P2P transfer.
+v2 keeps Syncthing as the sync engine and provides platform-owned lifecycle adapters. Desktop packages manage a sidecar process; Android packages manage a separately built Android-native engine through a Kotlin foreground service. Both paths retain the same constrained status, pairing, scan, confirmation, and rollback behavior.
 
 ## Components
 
@@ -11,6 +11,9 @@ v2 keeps Syncthing as the sync engine and adds a desktop backend that makes it f
 - `js/desktop-service.js`: desktop-only bridge for default-folder Markdown operations.
 - Tauri backend: native command layer for app paths, Syncthing process checks, local API proxying, and safe config previews.
 - Syncthing: bundled desktop sidecar in release builds; existing system installation only as an advanced/development fallback.
+- Android mobile shell: the existing dedicated `mobile.html`, `mobile.css`, and `mobile.js` entry rather than the desktop layout.
+- Android Tauri plugin: Kotlin bridge for foreground service, permissions, system file exposure, QR scanning, battery settings, and Android lifecycle events.
+- Android Syncthing engine: pinned v2.1.2 native artifacts for `arm64-v8a` and `x86_64`; never the desktop external binary.
 
 ## Data Flow
 
@@ -25,6 +28,43 @@ UI action
 ```
 
 In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible. If no desktop backend exists, operations that require native privileges fail with a clear message.
+
+## Android Data Flow
+
+```text
+mobile.html
+  -> mobileStorageService / syncService
+  -> Tauri Rust Android adapter
+  -> Kotlin Tauri plugin
+  -> SyncthingForegroundService
+  -> bundled libsyncthingnative.so
+  -> application-owned Markdown directory
+  -> P2P transfer to a desktop device
+```
+
+- The Android editor and Syncthing engine operate on the same application-owned directory of ordinary `.md` files.
+- An Android `DocumentsProvider` exposes active notes and conflict copies through the system file picker without exposing `.trash`, identity, configuration, database, logs, or runtime credentials.
+- PWA mode keeps IndexedDB. Android Tauri mode selects native storage and never silently falls back to IndexedDB after native initialization fails.
+- Platform-specific Tauri configuration loads the mobile entry and clears desktop `externalBin` packaging for Android.
+
+## Android Lifecycle
+
+- Opening the app starts the managed engine after native paths and credentials are ready.
+- While the app is visible, synchronization remains active without requiring broad storage access.
+- A user-started `dataSync` foreground service keeps a bounded background session alive and always shows a notification with a stop action.
+- WorkManager provides short, best-effort synchronization on an unmetered network; it does not simulate an always-running daemon.
+- API 35+ timeout callbacks stop the engine before the platform declares an ANR and record a user-visible reason.
+- The app does not start a data-sync foreground service from `BOOT_COMPLETED`.
+- Force-stop terminates service and scheduled work. Nothing silently restarts until the user opens the app again.
+- Camera denial preserves manual device-code entry; notification denial preserves foreground synchronization.
+
+## Android Native Boundary
+
+- The Android engine is built from pinned Syncthing v2.1.2 source for arm64 and x86-64 with NDK 28 or newer and verified for 16 KB page compatibility.
+- Kotlin owns process/service lifecycle; Rust owns safe REST requests, API Key handling, pairing validation, one-time confirmation tokens, readback, and rollback.
+- The REST endpoint remains loopback-only and fixed by native code. JavaScript cannot provide a port, API base, path, or credential.
+- Android notes paths are resolved natively and cannot be replaced by a frontend-supplied path or document URI.
+- Android package metadata records source revision, Go/NDK versions, ABI hashes, and MPL-2.0 notices.
 
 ## Tauri Commands
 
@@ -96,4 +136,4 @@ In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible.
 - Desktop sidecars are pinned for macOS Apple Silicon/Intel, Windows x64, and Linux x64. Native package validation remains pending for macOS Intel and Linux x64.
 - QR display, device-code pairing, and sync-center event refresh are available. Camera scanning and conflict-resolution workflows are not complete.
 - External development override mode still accepts a user-provided API Key; standard bundled-sidecar UI hides those advanced fields.
-- Mobile background sync depends on platform-specific Syncthing clients.
+- Android background sync is bounded by foreground-service and job quotas; it is not an all-day daemon. iOS background behavior remains a separate later track.
