@@ -7,7 +7,9 @@
     "test": "node tests/structure.test.mjs && node tests/desktop-service.test.mjs && node tests/desktop-storage.test.mjs && node tests/sync-service.test.mjs && node tests/sync-center.test.mjs",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "tauri:build:windows": "tauri build --bundles nsis"
+    "tauri:build:macos-intel": "tauri build --target x86_64-apple-darwin --bundles app",
+    "tauri:build:windows": "tauri build --bundles nsis",
+    "tauri:build:linux": "tauri build --bundles deb,appimage"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

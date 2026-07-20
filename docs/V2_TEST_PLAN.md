@@ -38,6 +38,14 @@
   - Verifies the v2 frontend under `v2/app` is bundled into a macOS `.app`.
   - Alpha target is `.app`; DMG packaging is intentionally deferred.
 
+- From `v2/`, `npm run tauri:build:macos-intel`
+  - Verifies the Tauri desktop shell cross-compiles for `x86_64-apple-darwin`.
+  - Verifies the Intel `.app` contains the matching x86-64 Syncthing sidecar.
+
+- From `v2/`, `npm run tauri:build:linux`
+  - Builds the Linux `deb` and AppImage targets on a native Linux x64 environment.
+  - This command is defined and structure-tested; native Linux execution remains pending.
+
 ## Desktop Manual Tests
 
 - Launch the Tauri app on macOS, Windows, and Linux.
@@ -132,6 +140,15 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Pairing Tauri invocations contain no API Key, arbitrary folder path, device address, or raw Syncthing configuration.
 - Offline QR generation contains only the canonical local device ID and no API Key, folder path, note content, or network address.
 - QR display expands and collapses without overflow at desktop and 390px mobile viewport widths; manual copy remains available.
+
+### Desktop Sidecar Artifact Checkpoint - 2026-07-20
+
+- Added the official Syncthing v2.1.2 macOS Intel and Linux x64 binaries using the release assets referenced in the signed checksum manifest.
+- `syncthing-macos-amd64-v2.1.2.zip` matched SHA-256 `f04b3d7f1492457e929119b91561f0ddc6bada070f46b68bd2464cda04983424`; its x86-64 Mach-O binary matched `24cd4219041087bf67a2773fe0aa8ad976b8e579b4768c31df365a58058f1743` and reported v2.1.2 under Rosetta.
+- `syncthing-linux-amd64-v2.1.2.tar.gz` matched SHA-256 `0cea24660ac7d8df19f01da979827b5c9463a8a60042e296829293cf80213ee4`; its x86-64 ELF binary matched `d5aa7b869042518ae62e35fd40a1ada84d3c7f970863c396da1db0d318509e89` and exposed the expected Linux amd64 Go build metadata.
+- The signed checksum manifest is recorded with SHA-256 `fc79100eb44eef13c0a4954afb73422bdc9efea866535b7525d5882d5e037b1a`. PGP signature verification remains pending because GnuPG is not installed on the host.
+- `npm run tauri:build:macos-intel` produced an x86-64 `.app`; it launched under Rosetta, bundled the expected sidecar hash, and returned `{"status":"OK"}` on the isolated loopback health endpoint.
+- Native macOS Intel lifecycle/Markdown-loop acceptance and all native Linux package acceptance remain open and are not implied by the Rosetta or artifact checks.
 
 ## Sync Event Tests
 

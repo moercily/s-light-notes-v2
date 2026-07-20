@@ -15,6 +15,17 @@
         "sha256": "0325655f864024e0eecd78df07bdedbad46cefc91f480503ff615b6211081869"
       }
     },
+    "x86_64-apple-darwin": {
+      "archive": {
+        "name": "syncthing-macos-amd64-v2.1.2.zip",
+        "url": "https://github.com/syncthing/syncthing/releases/download/v2.1.2/syncthing-macos-amd64-v2.1.2.zip",
+        "sha256": "f04b3d7f1492457e929119b91561f0ddc6bada070f46b68bd2464cda04983424"
+      },
+      "binary": {
+        "name": "syncthing-sidecar-x86_64-apple-darwin",
+        "sha256": "24cd4219041087bf67a2773fe0aa8ad976b8e579b4768c31df365a58058f1743"
+      }
+    },
     "x86_64-pc-windows-msvc": {
       "archive": {
         "name": "syncthing-windows-amd64-v2.1.2.zip",
@@ -25,6 +36,17 @@
         "name": "syncthing-sidecar-x86_64-pc-windows-msvc.exe",
         "sha256": "6bff9bbf005ea28f103da7a6508f2677bdd15bd344faf4b7f908872c83d76e3e"
       }
+    },
+    "x86_64-unknown-linux-gnu": {
+      "archive": {
+        "name": "syncthing-linux-amd64-v2.1.2.tar.gz",
+        "url": "https://github.com/syncthing/syncthing/releases/download/v2.1.2/syncthing-linux-amd64-v2.1.2.tar.gz",
+        "sha256": "0cea24660ac7d8df19f01da979827b5c9463a8a60042e296829293cf80213ee4"
+      },
+      "binary": {
+        "name": "syncthing-sidecar-x86_64-unknown-linux-gnu",
+        "sha256": "d5aa7b869042518ae62e35fd40a1ada84d3c7f970863c396da1db0d318509e89"
+      }
     }
   },
   "compatibility": {
@@ -32,6 +54,11 @@
     "restApi": "v2.1.2"
   },
   "verification": {
+    "checksumManifest": {
+      "name": "sha256sum.txt.asc",
+      "url": "https://github.com/syncthing/syncthing/releases/download/v2.1.2/sha256sum.txt.asc",
+      "sha256": "fc79100eb44eef13c0a4954afb73422bdc9efea866535b7525d5882d5e037b1a"
+    },
     "archiveHashMatchedOfficialSignedManifest": true,
     "pgpSignatureVerifiedLocally": false,
     "note": "The host did not have GnuPG installed; each archive SHA-256 was matched against Syncthing's official signed checksum manifest."

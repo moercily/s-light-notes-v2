@@ -93,7 +93,7 @@ In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible.
 
 ## v2 Alpha Limitations
 
-- Only the macOS Apple Silicon sidecar is bundled; macOS Intel, Windows x64, and Linux x64 artifacts are pending.
+- Desktop sidecars are pinned for macOS Apple Silicon/Intel, Windows x64, and Linux x64. Native package validation remains pending for macOS Intel and Linux x64.
 - QR display, device-code pairing, and sync-center event refresh are available. Camera scanning and conflict-resolution workflows are not complete.
 - External development override mode still accepts a user-provided API Key; standard bundled-sidecar UI hides those advanced fields.
 - Mobile background sync depends on platform-specific Syncthing clients.

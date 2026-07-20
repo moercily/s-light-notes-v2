@@ -19,7 +19,7 @@ Completed and verified:
 - Tauri v2 desktop shell with zero-bundler HTML frontend.
 - Independent v2 Markdown storage mode using an application-owned default notes folder.
 - Create, read, update, trash, restore, and permanent delete for desktop Markdown notes.
-- Bundled Syncthing v2.1.2 sidecar for macOS Apple Silicon.
+- Pinned Syncthing v2.1.2 desktop sidecars for macOS Apple Silicon/Intel, Windows x64, and Linux x64.
 - Application-owned Syncthing identity, configuration, database, logs, ports, and backend credential.
 - First-run default folder creation and isolated folder binding.
 - Device-code pairing with validation, preview, second confirmation, folder sharing, readback, and rollback.
@@ -32,9 +32,8 @@ Completed and verified:
 
 Known release gaps:
 
-- Only macOS Apple Silicon has a bundled sidecar and packaged-app proof.
-- Windows and Linux native builds have not been completed.
-- macOS Intel, Windows x64, and Linux x64 sidecar binaries are not bundled.
+- macOS Apple Silicon and Windows x64 have packaged-app proof; Linux and macOS Intel native package validation remain pending.
+- Windows x64 has been packaged and tested under x64 emulation, but its interactive Markdown loop and native x64 hardware coverage remain pending.
 - QR scanning is not implemented.
 - Real two-device synchronization and conflict handling have not been completed.
 - Android and iOS installable clients have not been created.
@@ -106,13 +105,15 @@ Build and test on the native operating system. Cross-compilation is not accepted
 
 Windows checkpoint (2026-07-16): Parallels Windows 11 ARM64 used the x64 Node and `x86_64-pc-windows-msvc` Rust toolchains plus the installed Visual Studio x64 C++ workload. Frontend tests, all 31 Rust tests, the x64 release build, NSIS packaging, installation, launch, sidecar health, normal-exit cleanup, and identity persistence passed under Windows x64 emulation. The interactive Markdown loop and native x64 hardware coverage remain pending.
 
+macOS Intel preparation checkpoint (2026-07-20): the official x86-64 sidecar was verified and `npm run tauri:build:macos-intel` produced an x86-64 `.app` on Apple Silicon. The package launched under Rosetta and its bundled sidecar passed the loopback health check. Native Intel hardware or CI acceptance remains pending.
+
 ### 6.2 Sidecar Artifacts
 
 - `[x]` macOS Apple Silicon: `aarch64-apple-darwin` proof completed.
-- `[ ]` macOS Intel: add and verify `x86_64-apple-darwin`.
+- `[x]` macOS Intel: add and verify `x86_64-apple-darwin` archive integrity, binary architecture, and v2.1.2 execution under Rosetta.
 - `[x]` Windows x64: add and verify `x86_64-pc-windows-msvc` with the executable suffix required by Tauri.
-- `[ ]` Linux x64: add and verify `x86_64-unknown-linux-gnu`.
-- `[ ]` Record the exact Syncthing version, source URL, checksum, license notice, and target triple for every artifact.
+- `[x]` Linux x64: add and verify `x86_64-unknown-linux-gnu` archive integrity, ELF architecture, and Go build metadata; native execution remains part of package acceptance.
+- `[x]` Record the exact Syncthing version, source URL, checksum, license notice, and target triple for every artifact.
 - `[ ]` Verify each package starts its sidecar with an isolated application-data directory and the correct loopback/API/P2P ports.
 - `[ ]` Verify each package can coexist with a system Syncthing installation without reusing or overwriting its identity.
 - `[ ]` Verify each package stops the sidecar on normal app quit and preserves identity on restart.

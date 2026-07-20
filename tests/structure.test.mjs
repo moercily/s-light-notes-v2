@@ -21,7 +21,9 @@ const v2MustExist = [
   'src-tauri/icons/icon.ico',
   'src-tauri/binaries/SYNCTHING_SIDECAR.json',
   'src-tauri/binaries/syncthing-sidecar-aarch64-apple-darwin',
+  'src-tauri/binaries/syncthing-sidecar-x86_64-apple-darwin',
   'src-tauri/binaries/syncthing-sidecar-x86_64-pc-windows-msvc.exe',
+  'src-tauri/binaries/syncthing-sidecar-x86_64-unknown-linux-gnu',
   'src-tauri/binaries/notices/SYNCTHING_LICENSE.txt',
   'docs/V2_DEVELOPMENT_PLAN.md',
   'tests/sync-service.test.mjs',
@@ -45,9 +47,19 @@ assert.match(
   'Windows release builds should not open a console window'
 );
 assert.equal(
+  packageJson.scripts['tauri:build:macos-intel'],
+  'tauri build --target x86_64-apple-darwin --bundles app',
+  'macOS Intel releases should use the x86_64 target explicitly'
+);
+assert.equal(
   packageJson.scripts['tauri:build:windows'],
   'tauri build --bundles nsis',
   'Windows releases should use the explicit NSIS package target'
+);
+assert.equal(
+  packageJson.scripts['tauri:build:linux'],
+  'tauri build --bundles deb,appimage',
+  'Linux releases should build deb and AppImage packages'
 );
 assert.equal(
   tauriConfig.app.withGlobalTauri,
@@ -63,7 +75,12 @@ assert.deepEqual(
 const sidecarMetadata = JSON.parse(readFileSync('src-tauri/binaries/SYNCTHING_SIDECAR.json', 'utf8'));
 assert.equal(sidecarMetadata.version, 'v2.1.2');
 assert.equal(sidecarMetadata.compatibility.syncthingConfigVersion, 52);
-for (const target of ['aarch64-apple-darwin', 'x86_64-pc-windows-msvc']) {
+for (const target of [
+  'aarch64-apple-darwin',
+  'x86_64-apple-darwin',
+  'x86_64-pc-windows-msvc',
+  'x86_64-unknown-linux-gnu',
+]) {
   const artifact = sidecarMetadata.artifacts[target];
   assert.ok(artifact, `${target} sidecar metadata should exist`);
   const sidecarHash = createHash('sha256')
