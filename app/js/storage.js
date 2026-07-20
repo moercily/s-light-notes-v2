@@ -1,6 +1,6 @@
 /* ============================================
    s-light notes — 存储抽象层
-   提供桌面文件、FSA（文件系统）和 IDB（浏览器存储）三种模式
+   提供桌面文件、Android 原生文件、FSA 和 IDB 四种模式
    对外接口完全一致，内部自动选择适配器
    ============================================ */
 
@@ -390,6 +390,34 @@ async function desktopPermanentlyDelete(id) {
 }
 
 // ====================================================
+//  Android 适配器 - 应用私有 Markdown 文件
+// ====================================================
+
+function normalizeMobileNote(note) {
+    return normalizeDesktopNote(note);
+}
+
+async function mobileListNotes() {
+    const notes = await window.mobileStorageService.list(AppState._showTrash);
+    return notes.map(normalizeMobileNote);
+}
+
+async function mobileReadNote(id) {
+    const note = await window.mobileStorageService.read(id, AppState._showTrash);
+    return normalizeMobileNote(note);
+}
+
+async function mobileSaveNote(id, content) {
+    const suggestedId = generateNoteId(extractTitle(content));
+    const result = await window.mobileStorageService.save(id, suggestedId, content);
+    return {
+        id: result.id,
+        title: extractTitle(content),
+        updatedAt: result.updatedAt,
+    };
+}
+
+// ====================================================
 //  统一接口 — 根据 AppState.storageMode 路由
 // ====================================================
 
@@ -397,6 +425,8 @@ async function listNotes() {
     let notes = [];
     if (AppState.storageMode === 'desktop') {
         notes = await desktopListNotes();
+    } else if (AppState.storageMode === 'android') {
+        notes = await mobileListNotes();
     } else if (AppState.storageMode === 'fsa') {
         if (AppState._showTrash) {
             notes = await fsaListTrashNotes();
@@ -416,6 +446,8 @@ async function listNotes() {
 async function readNote(id) {
     if (AppState.storageMode === 'desktop') {
         return desktopReadNote(id);
+    } else if (AppState.storageMode === 'android') {
+        return mobileReadNote(id);
     } else if (AppState.storageMode === 'fsa') {
         if (AppState._showTrash) {
             return fsaReadTrashNote(id);
@@ -430,6 +462,8 @@ async function readNote(id) {
 async function saveNote(id, content) {
     if (AppState.storageMode === 'desktop') {
         return desktopSaveNote(id, content);
+    } else if (AppState.storageMode === 'android') {
+        return mobileSaveNote(id, content);
     } else if (AppState.storageMode === 'fsa') {
         return fsaSaveNote(id, content);
     } else if (AppState.storageMode === 'idb') {
@@ -442,6 +476,8 @@ async function saveNote(id, content) {
 async function deleteNote(id) {
     if (AppState.storageMode === 'desktop') {
         return desktopMoveToTrash(id);
+    } else if (AppState.storageMode === 'android') {
+        return window.mobileStorageService.trash(id);
     } else if (AppState.storageMode === 'fsa') {
         return fsaMoveToTrash(id);
     } else if (AppState.storageMode === 'idb') {
@@ -454,6 +490,8 @@ async function deleteNote(id) {
 async function restoreNote(id) {
     if (AppState.storageMode === 'desktop') {
         return desktopRestoreFromTrash(id);
+    } else if (AppState.storageMode === 'android') {
+        return window.mobileStorageService.restore(id);
     } else if (AppState.storageMode === 'fsa') {
         return fsaRestoreFromTrash(id);
     } else if (AppState.storageMode === 'idb') {
@@ -466,6 +504,8 @@ async function restoreNote(id) {
 async function permanentlyDelete(id) {
     if (AppState.storageMode === 'desktop') {
         return desktopPermanentlyDelete(id);
+    } else if (AppState.storageMode === 'android') {
+        return window.mobileStorageService.delete(id);
     } else if (AppState.storageMode === 'fsa') {
         return fsaPermanentlyDelete(id);
     } else if (AppState.storageMode === 'idb') {
@@ -530,7 +570,11 @@ function importNotes() {
                 try {
                     const content = await file.text();
                     const id = file.name.replace(/\.(md|txt|markdown)$/i, '');
-                    await idbSaveNote(id, content);
+                    if (AppState.storageMode === 'android') {
+                        await window.mobileStorageService.save(null, generateNoteId(id), content);
+                    } else {
+                        await idbSaveNote(id, content);
+                    }
                     count++;
                 } catch (err) {
                     console.warn('导入文件失败: ' + file.name, err);

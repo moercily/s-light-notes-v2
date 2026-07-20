@@ -4,7 +4,7 @@
    ============================================ */
 
 const CACHE_PREFIX = 's-light-notes-v2-';
-const CACHE_NAME = CACHE_PREFIX + 'alpha-4';
+const CACHE_NAME = CACHE_PREFIX + 'alpha-5';
 
 // 需要缓存的静态资源
 const STATIC_ASSETS = [
@@ -18,6 +18,7 @@ const STATIC_ASSETS = [
     './js/utils.js',
     './js/storage.js',
     './js/desktop-service.js',
+    './js/mobile-storage-service.js',
     './js/sync.js',
     './js/sync-service.js',
     './js/sync-center.js',

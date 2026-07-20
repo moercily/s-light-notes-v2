@@ -15,6 +15,7 @@ const v2MustExist = [
   'app/index.html',
   'app/js/storage.js',
   'app/js/desktop-service.js',
+  'app/js/mobile-storage-service.js',
   'app/js/sync-center.js',
   'app/js/sync-service.js',
   'src-tauri/tauri.conf.json',
@@ -22,6 +23,8 @@ const v2MustExist = [
   'src-tauri/gen/android/app/build.gradle.kts',
   'src-tauri/gen/android/app/src/main/AndroidManifest.xml',
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/AndroidBridgePlugin.kt',
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/NoteStore.kt',
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/NotesDocumentsProvider.kt',
   'src-tauri/src/android.rs',
   'src-tauri/src/desktop.rs',
   'src-tauri/capabilities/android.json',
@@ -94,6 +97,8 @@ assert.match(androidBuild, /compileSdk = 36/);
 assert.match(androidBuild, /minSdk = 26/);
 assert.match(androidBuild, /targetSdk = 36/);
 assert.doesNotMatch(androidManifest, /LEANBACK_LAUNCHER|android\.software\.leanback/);
+assert.match(androidManifest, /android\.content\.action\.DOCUMENTS_PROVIDER/);
+assert.match(androidManifest, /android:permission="android\.permission\.MANAGE_DOCUMENTS"/);
 assert.match(tauriLib, /#\[cfg\(desktop\)\]\s*mod desktop/);
 assert.match(tauriLib, /#\[cfg\(target_os = "android"\)\]\s*mod android/);
 assert.match(androidRust, /register_android_plugin/);
@@ -147,7 +152,7 @@ for (const id of [
 }
 
 const serviceWorker = readFileSync('app/sw.js', 'utf8');
-for (const asset of ['desktop-service.js', 'sync-service.js', 'sync-center.js']) {
+for (const asset of ['desktop-service.js', 'mobile-storage-service.js', 'sync-service.js', 'sync-center.js']) {
   assert.match(serviceWorker, new RegExp(asset.replace('.', '\\.')), `${asset} should be precached`);
 }
 assert.match(serviceWorker, /CACHE_PREFIX/, 'v2 should only clean up its own cache namespace');

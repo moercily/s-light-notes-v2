@@ -1,12 +1,12 @@
 /* ============================================
    s-light notes — 移动端入口
-   独立移动壳，默认使用 IndexedDB，不影响桌面端 app.js
+   独立移动壳，Android 使用原生 Markdown，PWA 回退到 IndexedDB
    ============================================ */
 
 const AppState = {
     currentNoteId: null,
     notes: [],
-    storageMode: 'idb',
+    storageMode: null,
     folderHandle: null,
     isDirty: false,
     searchQuery: '',
@@ -22,8 +22,14 @@ async function initMobileApp() {
     initMobileViewport();
 
     try {
-        await initIDB();
-        AppState.storageMode = 'idb';
+        if (window.mobileStorageService && window.mobileStorageService.isAvailable()) {
+            await window.mobileStorageService.ensure();
+            AppState.storageMode = 'android';
+            $('#mobile-settings-note').textContent = '笔记保存为本机 Markdown 文件，并由应用安全管理。';
+        } else {
+            await initIDB();
+            AppState.storageMode = 'idb';
+        }
         await refreshMobileNotes();
         setMobileSaveStatus('就绪');
     } catch (err) {
@@ -49,10 +55,25 @@ function bindMobileEvents() {
     $('#mobile-install').addEventListener('click', onMobileInstall);
     $('#mobile-theme-toggle').addEventListener('click', toggleMobileTheme);
     window.addEventListener('beforeinstallprompt', onMobileBeforeInstallPrompt);
+    document.addEventListener('visibilitychange', onMobileVisibilityChange);
 
     $$('#mobile-format-bar button').forEach(btn => {
         btn.addEventListener('click', () => applyMobileFormat(btn.dataset.format));
     });
+}
+
+async function onMobileVisibilityChange() {
+    if (document.visibilityState !== 'visible' || AppState.storageMode !== 'android') return;
+
+    try {
+        if (AppState.currentNoteId && !AppState.isDirty) {
+            await openMobileNote(AppState.currentNoteId);
+        } else if (!AppState.isDirty) {
+            await refreshMobileNotes();
+        }
+    } catch (err) {
+        console.warn('重新读取 Android 笔记失败:', err);
+    }
 }
 
 function showMobileView(name) {
