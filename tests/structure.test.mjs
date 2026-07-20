@@ -21,6 +21,10 @@ const v2MustExist = [
   'src-tauri/tauri.android.conf.json',
   'src-tauri/gen/android/app/build.gradle.kts',
   'src-tauri/gen/android/app/src/main/AndroidManifest.xml',
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/AndroidBridgePlugin.kt',
+  'src-tauri/src/android.rs',
+  'src-tauri/src/desktop.rs',
+  'src-tauri/capabilities/android.json',
   'src-tauri/icons/icon.ico',
   'src-tauri/binaries/SYNCTHING_SIDECAR.json',
   'src-tauri/binaries/syncthing-sidecar-aarch64-apple-darwin',
@@ -45,6 +49,8 @@ const tauriConfig = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8')
 const androidConfig = JSON.parse(readFileSync('src-tauri/tauri.android.conf.json', 'utf8'));
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 const tauriMain = readFileSync('src-tauri/src/main.rs', 'utf8');
+const tauriLib = readFileSync('src-tauri/src/lib.rs', 'utf8');
+const androidRust = readFileSync('src-tauri/src/android.rs', 'utf8');
 const androidBuild = readFileSync('src-tauri/gen/android/app/build.gradle.kts', 'utf8');
 const androidManifest = readFileSync(
   'src-tauri/gen/android/app/src/main/AndroidManifest.xml',
@@ -88,6 +94,10 @@ assert.match(androidBuild, /compileSdk = 36/);
 assert.match(androidBuild, /minSdk = 26/);
 assert.match(androidBuild, /targetSdk = 36/);
 assert.doesNotMatch(androidManifest, /LEANBACK_LAUNCHER|android\.software\.leanback/);
+assert.match(tauriLib, /#\[cfg\(desktop\)\]\s*mod desktop/);
+assert.match(tauriLib, /#\[cfg\(target_os = "android"\)\]\s*mod android/);
+assert.match(androidRust, /register_android_plugin/);
+assert.doesNotMatch(androidRust, /syncthing-sidecar|open_notes_folder|opener::open/);
 
 const sidecarMetadata = JSON.parse(readFileSync('src-tauri/binaries/SYNCTHING_SIDECAR.json', 'utf8'));
 assert.equal(sidecarMetadata.version, 'v2.1.2');
