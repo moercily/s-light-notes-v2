@@ -189,7 +189,7 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Separate arm64 and x86_64 debug builds passed and each APK contained only its selected Rust library and matching Syncthing engine, plus the MPL-2.0 notice.
 - The merged manifest contains `dataSync` foreground-service permissions, an unexported service, no boot receiver, no all-files permission, and extracted native libraries.
 - Kotlin storage and engine-policy tests passed for both ABIs; frontend tests, all 31 Rust tests, and macOS desktop packaging also passed at this checkpoint.
-- Runtime launch, notification behavior, API 35+ timeout behavior, actual device identity generation, and P2P transfer are not considered passed until an emulator or physical device run is recorded.
+- Runtime launch, notification behavior, API 35+ timeout cleanup, device identity generation, and P2P transfer now have an API 36 arm64-emulator record. Physical-device validation remains required.
 
 ### Android Pairing Build Checkpoint - 2026-07-22
 
@@ -198,7 +198,7 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Kotlin policy tests reject incomplete device codes, control characters, oversized names, unsafe REST paths, and invalid private credentials.
 - Pairing confirmation is held in memory for five minutes, consumed once, rechecks live device state, shares only `s-light-notes`, verifies both writes, and attempts rollback after failure.
 - The sync center has no horizontal overflow at 320x640, 390x844, or 844x390; long device codes wrap and all tested controls retain at least 44px touch height.
-- Camera denial, scan cancellation, successful QR capture, two-device mutual confirmation, and real file transfer remain emulator/phone acceptance work.
+- Camera denial, manual device-code confirmation, mutual desktop pairing, and real file transfer pass on an API 36 arm64 emulator. Actual camera QR capture and physical-phone pairing remain open.
 
 ### Android Background Policy Build Checkpoint - Current Branch
 
@@ -208,7 +208,7 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - WorkManager scheduler metadata may survive a reboot, but a boot-count gate prevents the worker from starting Syncthing until the app has been opened during the current boot.
 - Process lifecycle handling keeps app-owned QR scanning from being treated as a true background transition. Leaving the application stops continuous synchronization unless the user enabled the notified session.
 - API 35+ timeout, notification stop, app-background stop, policy stop, and opportunity-completion reasons are persisted for the sync-center status.
-- Frontend tests and arm64/x86-64 Kotlin compilation and unit tests pass. Real notification denial, QR activity transition, WorkManager execution timing, API timeout, force-stop, and power behavior remain emulator/phone acceptance work.
+- Frontend tests and arm64/x86-64 Kotlin compilation and unit tests pass. API 36 emulator checks pass for notification denial, QR permission denial, notification stop, API timeout, force-stop, reboot gating, and foreground/background transitions. A naturally timed WorkManager run and physical-phone power behavior remain open.
 
 ### Android 16 Local Network Compatibility
 
@@ -226,7 +226,18 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - The mobile note list marks conflicts separately. Opening one hides the ordinary delete action, sets the editor to `contenteditable=false`, and exposes keep-copy, copy-content, and trash actions.
 - Keeping a copy writes the same Markdown content through the normal native save path under a non-conflict unique name. Viewing and copying do not write the original conflict file.
 - A 320x640 browser fixture confirmed no horizontal overflow, 44px conflict actions, a 44px sync-center conflict row, and a read-only editor attribute. The fixture was removed after validation.
-- Real acceptance remains open: create competing offline edits on Android and desktop, reconnect, verify Syncthing creates the conflict file, execute each action, and compare both original file hashes before and after view/copy/keep operations.
+- API 36 runtime acceptance passes for competing Android/desktop offline edits, Syncthing conflict-file creation on both peers, conflict-list refresh, read-only opening, and keep-as-new without deleting the original conflict. Clipboard, trash, and before/after hash checks remain for the physical-device pass.
+
+### Android API 36 Runtime Acceptance - Current Branch
+
+- Installed the arm64 debug APK on a clean API 36 emulator and verified native Markdown create/save/reopen plus system Files visibility through `DocumentsProvider`.
+- Verified nearby-device denial leaves editing available and prevents engine startup; granting access starts the bundled engine with a fixed loopback-only management endpoint. Later revocation stops it safely.
+- Verified foreground synchronization without notification permission, explicit notified background synchronization, the notification stop action, default background stop, force-stop non-resurrection, reboot gating, and stable Syncthing identity across reopen and reboot.
+- Forced the API 35+ `dataSync` foreground-service timeout and verified the service and child engine stop cleanly with a recorded reason and no crash.
+- Paired the Android runtime with an isolated packaged desktop Syncthing peer using the app's manual device-code confirmation. A note created on Android arrived on desktop, and a desktop-created note arrived in the Android private Markdown directory.
+- Stopped synchronization, edited the same two notes independently on both peers, reconnected, and verified real `.sync-conflict-*` files appeared on both sides and in the app's conflict workflow.
+- Verified camera denial keeps the pairing screen usable, and portrait plus low-height landscape screenshots retain status-bar separation and usable controls.
+- Not yet passed: actual QR capture, x86-64 emulator runtime, naturally scheduled WorkManager exchange, physical arm64 phone battery/network/file-provider tests, release signing, and store packaging.
 
 - Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
 - Android emulator gate: install and launch on an API 36 x86-64 image; verify 320px-430px layout, safe areas, keyboard, rotation, Android back handling, and no horizontal overflow.
