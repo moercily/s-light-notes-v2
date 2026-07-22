@@ -448,6 +448,10 @@ button {
     margin-top: 12px;
 }
 
+#mobile-pairing-message {
+    margin-top: 10px;
+}
+
 .sync-actions button,
 .sync-wide-button {
     min-width: 0;

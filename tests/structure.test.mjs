@@ -147,6 +147,7 @@ for (const id of [
   'mobile-device-code',
   'mobile-remote-device-id',
   'mobile-scan-device-qr',
+  'mobile-pairing-message',
   'mobile-preview-pairing',
   'mobile-confirm-pairing',
   'mobile-sync-devices',
@@ -184,6 +185,10 @@ const opportunityWorker = readFileSync(
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/OpportunisticSyncWorker.kt',
   'utf8'
 );
+const deviceQrScanner = readFileSync(
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/DeviceQrScanner.kt',
+  'utf8'
+);
 assert.match(androidPolicy, /Settings\.Global\.BOOT_COUNT/);
 assert.match(opportunityWorker, /wasOpenedThisBoot/);
 assert.match(opportunityWorker, /hasLocalNetworkPermission/);
@@ -191,7 +196,12 @@ assert.match(androidEngine, /127\.0\.0\.1:8386/);
 assert.match(androidEngine, /STGUIAPIKEY/);
 assert.doesNotMatch(androidEngine, /0\.0\.0\.0:8386/);
 assert.match(androidEngine, /confirmationToken|PendingPairing/);
+assert.match(deviceQrScanner, /Manifest\.permission\.CAMERA/);
+assert.match(deviceQrScanner, /launchCameraPermissionRequest/);
+assert.match(deviceQrScanner, /cameraPermission/);
 assert.doesNotMatch(mobileJs, /apiKey|127\.0\.0\.1:8386|STGUIAPIKEY/);
+assert.match(mobileJs, /未获得相机权限/);
+assert.match(mobileJs, /手动输入另一台设备的设备码/);
 for (const id of [
   'mobile-opportunistic-sync',
   'mobile-unmetered-only',

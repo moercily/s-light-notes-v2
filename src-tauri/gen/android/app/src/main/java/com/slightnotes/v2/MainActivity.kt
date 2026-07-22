@@ -20,6 +20,12 @@ class MainActivity : TauriActivity() {
     LocalNetworkPermissionCoordinator.complete(granted)
   }
 
+  private val cameraPermission = registerForActivityResult(
+    ActivityResultContracts.RequestPermission(),
+  ) { granted ->
+    DeviceQrScanner.completePermission(this, granted)
+  }
+
   private val qrScanner = registerForActivityResult(ScanContract()) { result ->
     DeviceQrScanner.complete(result.contents)
   }
@@ -39,6 +45,10 @@ class MainActivity : TauriActivity() {
         .setBeepEnabled(false)
         .setOrientationLocked(false),
     )
+  }
+
+  fun launchCameraPermissionRequest() {
+    cameraPermission.launch(Manifest.permission.CAMERA)
   }
 
   fun launchNotificationPermissionRequest() {

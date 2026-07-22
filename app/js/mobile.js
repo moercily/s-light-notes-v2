@@ -18,6 +18,7 @@ const AppState = {
     _pairingPreview: null,
     _syncStatus: null,
     _currentConflict: null,
+    _nativeDialogActive: false,
 };
 
 async function initMobileApp() {
@@ -250,13 +251,26 @@ async function onMobileCopyDeviceCode() {
 }
 
 async function onMobileScanDeviceQr() {
+    const pairingMessage = $('#mobile-pairing-message');
+    pairingMessage.hidden = true;
+    pairingMessage.textContent = '';
+    AppState._nativeDialogActive = true;
     try {
         const result = await window.androidSync.scanDeviceQr();
-        if (!result || result.cancelled) return;
+        if (!result || result.cancelled) {
+            if (result?.reason === 'cameraPermission') {
+                pairingMessage.textContent = '未获得相机权限，你仍可手动输入另一台设备的设备码。';
+                pairingMessage.hidden = false;
+            }
+            return;
+        }
         $('#mobile-remote-device-id').value = result.deviceId || '';
         await onMobilePreviewPairing();
     } catch (err) {
-        setMobileSyncMessage('扫码失败', err.message || String(err));
+        pairingMessage.textContent = '扫码失败：' + (err.message || String(err));
+        pairingMessage.hidden = false;
+    } finally {
+        AppState._nativeDialogActive = false;
     }
 }
 
@@ -370,6 +384,7 @@ async function onMobileOpenBatterySettings() {
 
 async function onMobileVisibilityChange() {
     if (document.visibilityState !== 'visible') return;
+    if (AppState._nativeDialogActive) return;
     if (AppState._view === 'sync') {
         await Promise.all([refreshMobileSyncCenter(), refreshMobileBackgroundPolicy()]);
         return;
