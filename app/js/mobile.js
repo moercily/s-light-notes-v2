@@ -17,6 +17,7 @@ const AppState = {
     _view: 'list',
     _pairingPreview: null,
     _syncStatus: null,
+    _currentConflict: null,
 };
 
 async function initMobileApp() {
@@ -74,6 +75,9 @@ function bindMobileEvents() {
     $('#mobile-background-session').addEventListener('change', onMobileBackgroundPolicyChange);
     $('#mobile-request-notification').addEventListener('click', onMobileRequestNotificationPermission);
     $('#mobile-open-battery-settings').addEventListener('click', onMobileOpenBatterySettings);
+    $('#mobile-conflict-keep').addEventListener('click', onMobileConflictKeep);
+    $('#mobile-conflict-copy').addEventListener('click', onMobileConflictCopy);
+    $('#mobile-conflict-trash').addEventListener('click', onMobileConflictTrash);
     window.addEventListener('beforeinstallprompt', onMobileBeforeInstallPrompt);
     document.addEventListener('visibilitychange', onMobileVisibilityChange);
 
@@ -97,7 +101,11 @@ async function refreshMobileSyncCenter() {
     if (!window.androidSync || !window.androidSync.isAvailable()) return;
     setMobileSyncMessage('正在检查', '正在读取本机同步引擎状态。');
     try {
-        const status = await window.androidSync.getStatus();
+        const [status, conflicts] = await Promise.all([
+            window.androidSync.getStatus(),
+            window.androidSync.getConflicts(),
+        ]);
+        renderMobileConflicts(conflicts);
         AppState._syncStatus = status;
         if (status.localNetworkPermissionRequired && !status.localNetworkPermissionGranted) {
             setMobileSyncMessage(
@@ -170,6 +178,24 @@ function renderMobilePairingInfo(info) {
     const state = folder.state === 'idle' ? '已同步' : (folder.state || '等待状态');
     $('#mobile-folder-state').textContent = '笔记文件夹：' + state +
         (Number.isFinite(folder.needFiles) && folder.needFiles > 0 ? '，待接收 ' + folder.needFiles + ' 个文件' : '');
+}
+
+function renderMobileConflicts(conflicts) {
+    const list = $('#mobile-sync-conflicts');
+    list.innerHTML = '';
+    if (!Array.isArray(conflicts) || conflicts.length === 0) {
+        list.innerHTML = '<li>当前没有冲突副本</li>';
+        return;
+    }
+    conflicts.forEach(conflict => {
+        const item = document.createElement('li');
+        const name = document.createElement('strong');
+        const time = document.createElement('span');
+        name.textContent = conflict.sourceId || conflict.id;
+        time.textContent = formatDate(conflict.updatedAt);
+        item.append(name, time);
+        list.appendChild(item);
+    });
 }
 
 async function onMobileSyncStart() {
@@ -423,6 +449,12 @@ function renderMobileNotes() {
         btn.className = 'mobile-note-item';
         btn.innerHTML = '<strong></strong><span></span>';
         btn.querySelector('strong').textContent = note.title || '未命名';
+        if (note.isConflict) {
+            const badge = document.createElement('small');
+            badge.className = 'mobile-conflict-badge';
+            badge.textContent = '冲突';
+            btn.querySelector('strong').appendChild(badge);
+        }
         btn.querySelector('span').textContent = formatDate(note.updatedAt);
         btn.addEventListener('click', () => openMobileNote(note.id));
         item.appendChild(btn);
@@ -462,9 +494,13 @@ async function openMobileNote(id) {
     }
 
     AppState.currentNoteId = note.id;
+    AppState._currentConflict = note.isConflict ? note : null;
     AppState.isDirty = false;
     $('#mobile-note-editor').innerHTML = renderMarkdown(note.content || '');
-    $('#mobile-note-title').textContent = note.title || '未命名';
+    $('#mobile-note-editor').contentEditable = note.isConflict ? 'false' : 'true';
+    $('#mobile-conflict-actions').hidden = !note.isConflict;
+    $('#mobile-delete-note').hidden = note.isConflict;
+    $('#mobile-note-title').textContent = (note.title || '未命名') + (note.isConflict ? ' · 冲突副本' : '');
     setMobileSaveStatus('已加载');
     showMobileView('editor');
 }
@@ -474,8 +510,12 @@ async function onMobileNewNote() {
 
     AppState._showTrash = false;
     AppState.currentNoteId = null;
+    AppState._currentConflict = null;
     AppState.isDirty = false;
     $('#mobile-note-editor').innerHTML = '';
+    $('#mobile-note-editor').contentEditable = 'true';
+    $('#mobile-conflict-actions').hidden = true;
+    $('#mobile-delete-note').hidden = false;
     $('#mobile-note-title').textContent = '新建笔记';
     setMobileSaveStatus('编辑中');
     showMobileView('editor');
@@ -537,6 +577,46 @@ async function onMobileDeleteCurrent() {
     AppState.currentNoteId = null;
     AppState.isDirty = false;
     $('#mobile-note-editor').innerHTML = '';
+    await refreshMobileNotes();
+    navigateMobileBack();
+}
+
+async function onMobileConflictKeep() {
+    const conflict = AppState._currentConflict;
+    if (!conflict) return;
+    try {
+        const result = await saveNote(null, conflict.content);
+        AppState._currentConflict = null;
+        await refreshMobileNotes();
+        await openMobileNote(result.id);
+        setMobileSaveStatus('已保留为新笔记');
+    } catch (err) {
+        setMobileSaveStatus('保留失败');
+    }
+}
+
+async function onMobileConflictCopy() {
+    const conflict = AppState._currentConflict;
+    if (!conflict) return;
+    try {
+        await navigator.clipboard.writeText(conflict.content);
+        setMobileSaveStatus('冲突内容已复制');
+    } catch (err) {
+        setMobileSaveStatus('复制失败');
+    }
+}
+
+async function onMobileConflictTrash() {
+    const conflict = AppState._currentConflict;
+    if (!conflict) return;
+    if (!confirm('确定把这个冲突副本移入回收站吗？')) return;
+    await deleteNote(conflict.id);
+    AppState._currentConflict = null;
+    AppState.currentNoteId = null;
+    $('#mobile-note-editor').innerHTML = '';
+    $('#mobile-note-editor').contentEditable = 'true';
+    $('#mobile-conflict-actions').hidden = true;
+    $('#mobile-delete-note').hidden = false;
     await refreshMobileNotes();
     navigateMobileBack();
 }

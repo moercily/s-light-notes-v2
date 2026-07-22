@@ -12,6 +12,14 @@
         return nativeInvoke(command, payload || {});
     }
 
+    function isConflictId(id) {
+        return /\.sync-conflict/i.test(id || '');
+    }
+
+    function conflictSourceId(id) {
+        return String(id || '').replace(/\.sync-conflict.*$/i, '');
+    }
+
     window.androidSync = {
         isAvailable() {
             return typeof getInvoke() === 'function';
@@ -43,6 +51,18 @@
         },
         scanDeviceQr() {
             return invoke('android_scan_device_qr');
+        },
+        async getConflicts() {
+            const notes = await invoke('mobile_storage_list', {
+                request: { inTrash: false },
+            });
+            return (Array.isArray(notes) ? notes : [])
+                .filter(note => isConflictId(note.id))
+                .map(note => ({
+                    id: note.id,
+                    sourceId: conflictSourceId(note.id),
+                    updatedAt: note.updatedAt,
+                }));
         },
         getBackgroundPolicy() {
             return invoke('android_get_background_policy');

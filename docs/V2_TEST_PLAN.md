@@ -220,6 +220,14 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Confirm the merged manifest includes `NEARBY_WIFI_DEVICES` with `neverForLocation`, and does not include fine/coarse/background location permissions.
 - Restore the default compatibility state after testing with `adb shell am compat disable RESTRICT_LOCAL_NETWORK com.slightnotes.v2`.
 
+### Android Conflict Workflow Checkpoint - Current Branch
+
+- The Android sync bridge filters Syncthing conflict IDs and returns only ID, source ID, and update time; note content is not included in the conflict-status result.
+- The mobile note list marks conflicts separately. Opening one hides the ordinary delete action, sets the editor to `contenteditable=false`, and exposes keep-copy, copy-content, and trash actions.
+- Keeping a copy writes the same Markdown content through the normal native save path under a non-conflict unique name. Viewing and copying do not write the original conflict file.
+- A 320x640 browser fixture confirmed no horizontal overflow, 44px conflict actions, a 44px sync-center conflict row, and a read-only editor attribute. The fixture was removed after validation.
+- Real acceptance remains open: create competing offline edits on Android and desktop, reconnect, verify Syncthing creates the conflict file, execute each action, and compare both original file hashes before and after view/copy/keep operations.
+
 - Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
 - Android emulator gate: install and launch on an API 36 x86-64 image; verify 320px-430px layout, safe areas, keyboard, rotation, Android back handling, and no horizontal overflow.
 - Android storage gate: create, save, reopen, trash, restore, permanently delete, and externally read/edit Markdown through the system `DocumentsProvider`.

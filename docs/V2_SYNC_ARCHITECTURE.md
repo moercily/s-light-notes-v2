@@ -70,6 +70,7 @@ mobile.html
 - ZXing launches only from the explicit scan action. A scan fills the device-code field and still passes through the same preview and confirmation flow as manual entry.
 - The REST endpoint remains loopback-only and fixed by native code. JavaScript cannot provide a port, API base, path, or credential.
 - Android notes paths are resolved natively and cannot be replaced by a frontend-supplied path or document URI.
+- Android conflict discovery reuses the native note-list command and returns only conflict ID, source ID, and timestamp through the sync interface. Opening the corresponding note uses the normal native read boundary, but the mobile editor is forced read-only until the user keeps a new copy, copies content, or trashes the conflict file.
 - Android package metadata records source revision, Go/NDK versions, ABI hashes, and MPL-2.0 notices.
 
 ## Tauri Commands
@@ -144,6 +145,6 @@ mobile.html
 ## v2 Alpha Limitations
 
 - Desktop sidecars are pinned for macOS Apple Silicon/Intel, Windows x64, and Linux x64. Native package validation remains pending for macOS Intel and Linux x64.
-- QR display, device-code pairing, and sync-center event refresh are available. Camera scanning and conflict-resolution workflows are not complete.
+- QR display, device-code pairing, sync-center event refresh, and the Android read-only conflict workflow are available. Camera scanning and real two-device conflict generation still require device acceptance.
 - External development override mode still accepts a user-provided API Key; standard bundled-sidecar UI hides those advanced fields.
 - Android background sync is bounded by foreground-service and job quotas; it is not an all-day daemon. iOS background behavior remains a separate later track.

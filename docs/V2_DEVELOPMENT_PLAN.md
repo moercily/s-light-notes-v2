@@ -153,9 +153,9 @@ This phase validates the product behavior against two independent Syncthing iden
 
 - `[ ]` Edit the same note independently on both devices while offline.
 - `[ ]` Reconnect and verify Syncthing creates a conflict copy rather than silently overwriting content.
-- `[ ]` Show the conflict copy as a conflict item, separate from normal notes.
-- `[ ]` Preserve the original conflict content during view, copy, keep, and delete operations.
-- `[ ]` Update sync-center wording to match the observed conflict behavior.
+- `[x]` Show the conflict copy as a conflict item, separate from normal notes.
+- `[x]` Preserve the original conflict content during view, copy, keep, and delete operations.
+- `[x]` Update sync-center wording to match the observed conflict behavior.
 
 Exit condition: a two-device test record contains successful create, update, offline, reconnect, and conflict cases.
 
@@ -203,6 +203,8 @@ Android pairing checkpoint (2026-07-22): the dedicated mobile sync center, safe 
 Android background-policy checkpoint (current branch): process-level foreground detection now keeps synchronization active across in-app activities such as QR scanning. Leaving the app stops the continuous engine by default. AndroidX WorkManager 2.10.1 schedules a unique one-hour best-effort task with a 15-minute flex window, battery-not-low constraint, and unmetered network by default; the worker starts the engine only for a bounded scan/exchange window and refuses to run until the user has opened the app during the current system boot. A separately controlled background session requires notification permission, remains user-visible, uses `START_NOT_STICKY`, and records notification, policy, opportunity-completion, and API 35+ timeout stop reasons. No app-owned boot receiver or battery-optimization exemption request is added. Frontend tests and both ABI Kotlin unit-test variants pass; notification denial, system timeout, force-stop, WorkManager execution, and battery behavior remain device acceptance items.
 
 Android 16 local-network checkpoint (current branch): the package declares `NEARBY_WIFI_DEVICES` with `neverForLocation`, requests it only from the user-triggered sync start flow on API 36+, and keeps note editing available after denial. Process startup, manual start, and WorkManager all enforce the native permission gate. JavaScript receives only required/granted booleans and cannot bypass the check. The compatibility flag, denial, grant, revocation, discovery, and transfer outcomes remain API 36 emulator/phone acceptance items.
+
+Android conflict-workflow checkpoint (current branch): Syncthing conflict filenames are identified through the shared Markdown naming rules and shown with a dedicated badge in the mobile note list plus a source/time list in the sync center. Opening a conflict copy forces the editor to `contenteditable=false`; users may preserve the exact content as a new ordinary note, copy it, or move only the conflict file to trash. A constrained Android bridge test confirms conflict status results omit note content, and 320x640 browser checks confirm the read-only panel and sync list have no horizontal overflow with 44px controls. Actual conflict creation after two-device offline edits remains a P2P device acceptance item.
 
 Android branch and delivery policy:
 

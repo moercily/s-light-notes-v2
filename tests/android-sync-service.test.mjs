@@ -33,6 +33,7 @@ async function testAvailabilityAndNativeBoundary() {
   await service.confirmDevicePairing('one-time-token');
   await service.scanFolder();
   await service.scanDeviceQr();
+  await service.getConflicts();
   await service.getBackgroundPolicy();
   await service.setBackgroundPolicy({
     opportunisticSync: true,
@@ -52,6 +53,7 @@ async function testAvailabilityAndNativeBoundary() {
     'syncthing_confirm_device_pairing',
     'syncthing_scan_folder',
     'android_scan_device_qr',
+    'mobile_storage_list',
     'android_get_background_policy',
     'android_set_background_policy',
     'android_request_notification_permission',
@@ -64,7 +66,7 @@ async function testAvailabilityAndNativeBoundary() {
   assert.deepEqual(JSON.parse(JSON.stringify(calls[5].payload)), {
     request: { confirmationToken: 'one-time-token' },
   });
-  assert.deepEqual(JSON.parse(JSON.stringify(calls[9].payload)), {
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[10].payload)), {
     request: {
       opportunisticSync: true,
       unmeteredOnly: false,
@@ -75,5 +77,23 @@ async function testAvailabilityAndNativeBoundary() {
   assert.equal(JSON.stringify(calls).includes('8386'), false);
 }
 
+async function testConflictMetadataIsConstrained() {
+  const service = await loadAndroidSyncService(async (command) => {
+    if (command !== 'mobile_storage_list') return {};
+    return [
+      { id: '普通笔记', updatedAt: 1, content: 'normal' },
+      { id: '会议.sync-conflict-20260722-120000-DEVICE', updatedAt: 2, content: 'private' },
+    ];
+  });
+  const conflicts = await service.getConflicts();
+  assert.deepEqual(JSON.parse(JSON.stringify(conflicts)), [{
+    id: '会议.sync-conflict-20260722-120000-DEVICE',
+    sourceId: '会议',
+    updatedAt: 2,
+  }]);
+  assert.equal(JSON.stringify(conflicts).includes('private'), false);
+}
+
 await testAvailabilityAndNativeBoundary();
+await testConflictMetadataIsConstrained();
 console.log('android-sync-service tests passed');

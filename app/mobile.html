@@ -40,6 +40,15 @@
                 <button id="mobile-delete-note" class="icon-button danger" title="删除笔记" aria-label="删除笔记">删</button>
             </header>
             <div id="mobile-editor-scroll">
+                <div id="mobile-conflict-actions" class="mobile-conflict-actions" hidden>
+                    <strong>这是 Syncthing 保留的冲突副本</strong>
+                    <span>原内容以只读方式打开，请选择如何处理。</span>
+                    <div class="sync-actions">
+                        <button id="mobile-conflict-keep" type="button">保留为新笔记</button>
+                        <button id="mobile-conflict-copy" type="button">复制内容</button>
+                        <button id="mobile-conflict-trash" class="danger" type="button">移入回收站</button>
+                    </div>
+                </div>
                 <div id="mobile-note-editor"
                      contenteditable="true"
                      placeholder="写下你的想法...&#10;&#10;首行内容会作为笔记标题。">
@@ -118,6 +127,13 @@
                         <li>暂无设备</li>
                     </ul>
                     <p id="mobile-folder-state">笔记文件夹：等待状态</p>
+                </section>
+
+                <section class="sync-section" aria-labelledby="mobile-conflicts-title">
+                    <h2 id="mobile-conflicts-title">冲突副本</h2>
+                    <ul id="mobile-sync-conflicts" class="sync-conflict-list">
+                        <li>当前没有冲突副本</li>
+                    </ul>
                 </section>
 
                 <section class="sync-section" aria-labelledby="mobile-background-title">

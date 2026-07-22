@@ -150,12 +150,19 @@ for (const id of [
   'mobile-preview-pairing',
   'mobile-confirm-pairing',
   'mobile-sync-devices',
+  'mobile-sync-conflicts',
+  'mobile-conflict-actions',
+  'mobile-conflict-keep',
+  'mobile-conflict-copy',
+  'mobile-conflict-trash',
 ]) {
   assert.match(mobileHtml, new RegExp(`id=["']${id}["']`), `${id} should exist in mobile sync center`);
 }
 assert.match(mobileCss, /@media \(max-width: 340px\)/);
 assert.match(mobileCss, /orientation: landscape/);
 assert.match(mobileJs, /history\.pushState/);
+assert.match(mobileJs, /note\.isConflict/);
+assert.match(mobileJs, /contentEditable = note\.isConflict/);
 assert.match(mobileJs, /window\.addEventListener\('popstate'/);
 const androidEngine = readFileSync(
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/SyncthingEngine.kt',
