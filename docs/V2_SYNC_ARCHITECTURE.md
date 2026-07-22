@@ -37,7 +37,7 @@ mobile.html
   -> Tauri Rust Android adapter
   -> Kotlin Tauri plugin
   -> SyncthingForegroundService
-  -> bundled libsyncthingnative.so
+  -> bundled libsyncthingnative.so PIE executable
   -> application-owned Markdown directory
   -> P2P transfer to a desktop device
 ```
@@ -60,8 +60,9 @@ mobile.html
 
 ## Android Native Boundary
 
-- The Android engine is built from pinned Syncthing v2.1.2 source for arm64 and x86-64 with NDK 28 or newer and verified for 16 KB page compatibility.
-- Kotlin owns process/service lifecycle; Rust owns safe REST requests, API Key handling, pairing validation, one-time confirmation tokens, readback, and rollback.
+- The Android engine is built from pinned Syncthing v2.1.2 source for arm64 and x86-64 with Go 1.25.11 and NDK 28 or newer, and its ELF load segments are verified at 16 KB alignment.
+- `libsyncthingnative.so` is an Android PIE executable stored under `jniLibs` so the package manager extracts it to the private native-library directory. It is launched as a managed child process and is not loaded as a JNI shared library.
+- Kotlin owns process/service lifecycle, safe REST requests, the private API Key, fixed runtime paths, and initial folder binding. Rust exposes only constrained Tauri commands and never returns the credential to JavaScript. Pairing validation, one-time confirmation tokens, readback, and rollback remain the next Android implementation step.
 - The REST endpoint remains loopback-only and fixed by native code. JavaScript cannot provide a port, API base, path, or credential.
 - Android notes paths are resolved natively and cannot be replaced by a frontend-supplied path or document URI.
 - Android package metadata records source revision, Go/NDK versions, ABI hashes, and MPL-2.0 notices.

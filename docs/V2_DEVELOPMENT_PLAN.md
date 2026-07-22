@@ -185,15 +185,17 @@ QR scanning is blocked until the mobile shell and permission model are selected.
 ### 9.2 Android Native Route
 
 - `[x]` Select a Tauri mobile shell with an in-app Syncthing engine; Syncthing-Fork is a build/lifecycle reference only.
-- `[ ]` Create an Android project or Tauri Android target without reusing the desktop sidecar binary.
-- `[ ]` Target Android 16/API 36, minimum API 26, and the `arm64-v8a` and `x86_64` ABIs using NDK 28 or newer.
-- `[ ]` Store real Markdown files in an application-owned directory and expose only notes through an Android `DocumentsProvider`.
-- `[ ]` Build pinned Syncthing v2.1.2 Android native artifacts with recorded source, checksums, license, ABI, and 16 KB page compatibility.
+- `[x]` Create an Android project or Tauri Android target without reusing the desktop sidecar binary.
+- `[x]` Target Android 16/API 36, minimum API 26, and the `arm64-v8a` and `x86_64` ABIs using NDK 28 or newer.
+- `[x]` Store real Markdown files in an application-owned directory and expose only notes through an Android `DocumentsProvider`.
+- `[x]` Build pinned Syncthing v2.1.2 Android native artifacts with recorded source, checksums, license, ABI, and 16 KB page compatibility.
 - `[ ]` Implement foreground-service lifecycle, bounded WorkManager synchronization, notification handling, and API 35+ timeout cleanup.
 - `[ ]` Keep foreground editing usable when notification, camera, or background execution permission is unavailable.
 - `[ ]` Add offline QR scanning with manual device-code fallback and preserve preview/confirmation/rollback rules.
 - `[ ]` Pair Android with a desktop device and validate create/update/offline/conflict flows.
 - `[ ]` Document the behavior when the user force-stops the Android synchronization service.
+
+Android implementation checkpoint (2026-07-21): the dedicated Tauri project, platform split, native Markdown store, `DocumentsProvider`, mobile layout, and both pinned Syncthing engine artifacts are implemented. The arm64 and x86-64 artifacts are Android PIE executables packaged under `jniLibs` with the `.so` suffix used by the established Android wrapper pattern; they are managed as child processes and are not JNI libraries. Both ABI builds compile and package successfully. Foreground-service source and API 35+ timeout cleanup are present, but runtime service, permission, background, and P2P acceptance remain open until an emulator or connected device is available.
 
 Android branch and delivery policy:
 

@@ -8,4 +8,9 @@ class MainActivity : TauriActivity() {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
   }
+
+  override fun onStart() {
+    super.onStart()
+    SyncthingForegroundService.start(this)
+  }
 }

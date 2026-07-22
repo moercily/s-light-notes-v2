@@ -136,6 +136,16 @@ assert.match(mobileCss, /@media \(max-width: 340px\)/);
 assert.match(mobileCss, /orientation: landscape/);
 assert.match(mobileJs, /history\.pushState/);
 assert.match(mobileJs, /window\.addEventListener\('popstate'/);
+const androidEngine = readFileSync(
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/SyncthingEngine.kt',
+  'utf8'
+);
+assert.match(androidManifest, /FOREGROUND_SERVICE_DATA_SYNC/);
+assert.match(androidManifest, /SyncthingForegroundService/);
+assert.doesNotMatch(androidManifest, /BOOT_COMPLETED|MANAGE_EXTERNAL_STORAGE/);
+assert.match(androidEngine, /127\.0\.0\.1:8386/);
+assert.match(androidEngine, /STGUIAPIKEY/);
+assert.doesNotMatch(androidEngine, /0\.0\.0\.0:8386/);
 for (const id of [
   'sync-advanced-connection',
   'sync-binding-panel',

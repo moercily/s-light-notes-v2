@@ -36,16 +36,35 @@ class StorageTargetArgs {
 
 @TauriPlugin
 class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
+    private val appActivity = activity
     private val noteStore by lazy { NoteStore(activity.filesDir) }
 
     @Command
     fun getPlatformStatus(invoke: Invoke) {
+        val engine = SyncthingEngine.snapshot()
         val status = JSObject().apply {
             put("platform", "android")
             put("sdkInt", Build.VERSION.SDK_INT)
-            put("engineState", "notConfigured")
+            put("engineState", engine.state.value)
         }
         invoke.resolve(status)
+    }
+
+    @Command
+    fun getEngineStatus(invoke: Invoke) {
+        invoke.resolve(engineStatusToJson(SyncthingEngine.snapshot()))
+    }
+
+    @Command
+    fun startEngine(invoke: Invoke) = resolve(invoke) {
+        SyncthingForegroundService.start(appActivity)
+        engineStatusToJson(SyncthingEngine.snapshot())
+    }
+
+    @Command
+    fun stopEngine(invoke: Invoke) = resolve(invoke) {
+        SyncthingForegroundService.stop(appActivity)
+        engineStatusToJson(SyncthingEngine.snapshot())
     }
 
     @Command
@@ -107,6 +126,21 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
             put("content", note.content)
             put("updatedAt", note.updatedAt)
             put("inTrash", note.inTrash)
+        }
+    }
+
+    private fun engineStatusToJson(status: SyncthingEngine.Snapshot): JSObject {
+        return JSObject().apply {
+            put("mode", "android")
+            put("available", status.available)
+            put("running", status.running)
+            put("managed", true)
+            put("engineKind", "androidNative")
+            put("engineState", status.state.value)
+            put("message", status.message)
+            put("deviceId", status.deviceId ?: JSONObject.NULL)
+            put("folderId", SyncthingEngine.NOTES_FOLDER_ID)
+            put("version", SyncthingEngine.VERSION)
         }
     }
 }

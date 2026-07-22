@@ -182,6 +182,15 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 
 ## Mobile Tests
 
+### Android Native Engine Build Checkpoint - 2026-07-21
+
+- Syncthing v2.1.2 source archive SHA-256, Go 1.25.11, NDK 28.2.13676358, build flags, ABI paths, and artifact hashes are recorded in `src-tauri/android-engine/SYNCTHING_ANDROID.json`.
+- The arm64-v8a and x86_64 engines are verified as Android 64-bit PIE executables with 16 KB ELF load alignment.
+- Separate arm64 and x86_64 debug builds passed and each APK contained only its selected Rust library and matching Syncthing engine, plus the MPL-2.0 notice.
+- The merged manifest contains `dataSync` foreground-service permissions, an unexported service, no boot receiver, no all-files permission, and extracted native libraries.
+- Kotlin storage and engine-policy tests passed for both ABIs; frontend tests, all 31 Rust tests, and macOS desktop packaging also passed at this checkpoint.
+- Runtime launch, notification behavior, API 35+ timeout behavior, actual device identity generation, and P2P transfer are not considered passed until an emulator or physical device run is recorded.
+
 - Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
 - Android emulator gate: install and launch on an API 36 x86-64 image; verify 320px-430px layout, safe areas, keyboard, rotation, Android back handling, and no horizontal overflow.
 - Android storage gate: create, save, reopen, trash, restore, permanently delete, and externally read/edit Markdown through the system `DocumentsProvider`.

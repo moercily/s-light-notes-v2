@@ -55,6 +55,12 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    packaging {
+        // Syncthing is a PIE executable packaged with a .so suffix so Android
+        // extracts it into the app-owned native library directory.
+        jniLibs.useLegacyPackaging = true
+    }
+    sourceSets.getByName("main").assets.srcDir("../../../android-engine")
 }
 
 rust {

@@ -69,6 +69,21 @@ struct StorageDeleteResponse {
     deleted: bool,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidSyncStatus {
+    mode: String,
+    available: bool,
+    running: bool,
+    managed: bool,
+    engine_kind: String,
+    engine_state: String,
+    message: String,
+    device_id: Option<String>,
+    folder_id: String,
+    version: String,
+}
+
 fn android_native_plugin() -> TauriPlugin<Wry> {
     Builder::<Wry>::new("android-native")
         .setup(|app, api| {
@@ -150,6 +165,21 @@ fn mobile_storage_delete(
     Ok(response.deleted)
 }
 
+#[tauri::command]
+fn syncthing_status(native: State<'_, AndroidNative>) -> Result<AndroidSyncStatus, String> {
+    native_call(&native, "getEngineStatus", ())
+}
+
+#[tauri::command]
+fn syncthing_start(native: State<'_, AndroidNative>) -> Result<AndroidSyncStatus, String> {
+    native_call(&native, "startEngine", ())
+}
+
+#[tauri::command]
+fn syncthing_stop(native: State<'_, AndroidNative>) -> Result<AndroidSyncStatus, String> {
+    native_call(&native, "stopEngine", ())
+}
+
 fn storage_target_call(
     native: &AndroidNative,
     command: &str,
@@ -184,7 +214,10 @@ pub fn run() {
             mobile_storage_save,
             mobile_storage_trash,
             mobile_storage_restore,
-            mobile_storage_delete
+            mobile_storage_delete,
+            syncthing_status,
+            syncthing_start,
+            syncthing_stop
         ])
         .run(tauri::generate_context!())
         .expect("error while running s-light notes on Android");

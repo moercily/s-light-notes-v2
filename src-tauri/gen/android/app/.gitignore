@@ -1,5 +1,7 @@
 /src/main/**/generated
 /src/main/jniLibs/**/*.so
+!/src/main/jniLibs/arm64-v8a/libsyncthingnative.so
+!/src/main/jniLibs/x86_64/libsyncthingnative.so
 /src/main/assets/tauri.conf.json
 /tauri.build.gradle.kts
 /proguard-tauri.pro
