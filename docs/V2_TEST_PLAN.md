@@ -198,7 +198,7 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Kotlin policy tests reject incomplete device codes, control characters, oversized names, unsafe REST paths, and invalid private credentials.
 - Pairing confirmation is held in memory for five minutes, consumed once, rechecks live device state, shares only `s-light-notes`, verifies both writes, and attempts rollback after failure.
 - The sync center has no horizontal overflow at 320x640, 390x844, or 844x390; long device codes wrap and all tested controls retain at least 44px touch height.
-- Camera denial, manual device-code confirmation, mutual desktop pairing, and real file transfer pass on an API 36 arm64 emulator. Actual camera QR capture and physical-phone pairing remain open.
+- Camera denial, manual device-code confirmation, mutual desktop pairing, and real file transfer pass on an API 36 arm64 emulator. A physical API 36 arm64 phone also captured a QR code, parsed the canonical device ID, and rejected the already paired device without changing configuration.
 
 ### Android Background Policy Build Checkpoint - Current Branch
 
@@ -208,7 +208,7 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - WorkManager scheduler metadata may survive a reboot, but a boot-count gate prevents the worker from starting Syncthing until the app has been opened during the current boot.
 - Process lifecycle handling keeps app-owned QR scanning from being treated as a true background transition. Leaving the application stops continuous synchronization unless the user enabled the notified session.
 - API 35+ timeout, notification stop, app-background stop, policy stop, and opportunity-completion reasons are persisted for the sync-center status.
-- Frontend tests and arm64/x86-64 Kotlin compilation and unit tests pass. API 36 emulator checks pass for notification denial, QR permission denial, notification stop, API timeout, force-stop, reboot gating, and foreground/background transitions. A naturally timed WorkManager run and physical-phone power behavior remain open.
+- Frontend tests and arm64/x86-64 Kotlin compilation and unit tests pass. API 36 emulator checks pass for notification denial, QR permission denial, notification stop, API timeout, force-stop, reboot gating, and foreground/background transitions. Physical foreground/background, notification, force-stop, and identity-recovery behavior also pass. The one-hour worker is registered with battery-not-low and unmetered-network constraints; a naturally timed exchange and unplugged power measurement remain open.
 
 ### Android 16 Local Network Compatibility
 
@@ -239,7 +239,21 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Verified camera denial keeps the pairing screen usable, and portrait plus low-height landscape screenshots retain status-bar separation and usable controls.
 - Final regression passed `npm test`, all 31 Rust tests, arm64/x86-64 Kotlin unit tests, both split debug APK builds through the Tauri Android entry point, and macOS application packaging. Reinstalling the final arm64 APK over the tested app preserved notes, conflicts, and the existing Syncthing identity.
 - Final debug artifacts: `app-arm64-debug.apk` SHA-256 `4cc901f48b9f1b66267ce09002b21b440f0099a3f836bd8ccbe82e45c6fd563c`; `app-x86_64-debug.apk` SHA-256 `6e3297ac39ed9ae21065205d0bf626e973311b74ee9312e88587250c5ffd1854`.
-- Not yet passed: actual QR capture, x86-64 emulator runtime, naturally scheduled WorkManager exchange, physical arm64 phone battery/network/file-provider tests, release signing, and store packaging.
+- Not yet passed: x86-64 emulator runtime, naturally scheduled WorkManager exchange, unplugged physical-phone battery measurement, remaining conflict-action integrity checks, release signing, and store packaging.
+
+### Android 16 Physical Device Acceptance - 2026-07-22
+
+- Installed the arm64 debug APK on a Xiaomi 2211133C running Android 16/API 36 and HyperOS 3.0. The device reported `arm64-v8a`, a 1080x2400 display, and the 2025-10-01 security patch.
+- Created, saved, reopened, and synchronized real Markdown from the application-private notes directory. The system file picker showed the `s-light notes` provider and exposed only ordinary notes and conflict copies, not `.trash`, Syncthing identity, configuration, database, logs, or credentials.
+- Verified the nearby-device permission gate before startup, successful grant, later revocation with immediate engine stop, continued local editing, and recovery after the permission was restored.
+- Paired with an isolated desktop Syncthing peer through the app's preview and confirmation flow. Android-to-desktop and desktop-to-Android creation, modification, offline recovery, and direct LAN transfer passed.
+- Produced a real conflict through independent offline edits. The app listed the conflict, opened it read-only, and preserved its content as a new ordinary note without deleting the original conflict file.
+- Granted camera access only from the scan action and captured a QR code containing the isolated peer ID. Parsing succeeded and duplicate-device protection rejected the existing peer without applying another configuration change.
+- Verified foreground synchronization without notification permission. With an explicit notified background session enabled, the engine remained active after Home and Android reported a persistent notification with a stop action; disabling the session restored default background stop behavior.
+- Verified force-stop prevents process or engine resurrection. Reopening restored the same Syncthing certificate/key identity, fixed folder, paired peer, and scheduled WorkManager task.
+- Portrait keyboard input kept the editor usable. Portrait and landscape layouts retained system-bar separation, stable headers, and usable controls; the landscape keyboard naturally leaves only a shallow editing area on this device.
+- Security checks found the management API only on `127.0.0.1:8386`, while P2P used the expected LAN listener. Engine identity, configuration, database, logs, and API key remained inside application-private storage.
+- Remaining physical checks: observe a naturally scheduled one-hour WorkManager exchange, test conflict copy/trash/hash preservation actions, and measure battery behavior while unplugged. USB power during this session made battery-drain measurement invalid.
 
 - Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
 - Android emulator gate: install and launch on an API 36 x86-64 image; verify 320px-430px layout, safe areas, keyboard, rotation, Android back handling, and no horizontal overflow.
