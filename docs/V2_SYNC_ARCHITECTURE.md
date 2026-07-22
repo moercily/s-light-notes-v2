@@ -58,6 +58,7 @@ mobile.html
 - The app has no boot receiver and never starts its engine or `dataSync` foreground service from `BOOT_COMPLETED`. WorkManager's library components may restore scheduler metadata, but the worker compares Android's boot count and exits until the user opens the app during that boot.
 - Force-stop terminates service and scheduled work. Nothing silently restarts until the user opens the app again.
 - Camera denial preserves manual device-code entry; notification denial preserves foreground synchronization.
+- API 36+ local-network protection uses `NEARBY_WIFI_DEVICES` with `neverForLocation`. The process lifecycle, manual start command, and WorkManager worker all check the native permission before starting Syncthing; the frontend cannot bypass that gate.
 - Battery settings use the general system settings screen. The package does not declare `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` or directly request an exemption.
 
 ## Android Native Boundary
@@ -95,6 +96,7 @@ mobile.html
 - `desktop_delete_note`: permanently deletes a note from `.trash`.
 - Android-only `android_get_background_policy` and `android_set_background_policy`: read and update constrained opportunity/background choices without exposing native credentials or paths.
 - Android-only `android_request_notification_permission`: requests notification access only after a user action and returns a boolean result.
+- Android-only `android_request_local_network_permission`: requests API 36+ nearby-device access from the explicit sync-start flow and returns a boolean result.
 - Android-only `android_open_battery_settings`: opens system battery settings without requesting an optimization exemption.
 
 ## Desktop Storage Boundary

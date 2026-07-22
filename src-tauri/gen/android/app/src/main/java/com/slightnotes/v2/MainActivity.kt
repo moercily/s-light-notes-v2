@@ -14,6 +14,12 @@ class MainActivity : TauriActivity() {
     NotificationPermissionCoordinator.complete(granted)
   }
 
+  private val localNetworkPermission = registerForActivityResult(
+    ActivityResultContracts.RequestPermission(),
+  ) { granted ->
+    LocalNetworkPermissionCoordinator.complete(granted)
+  }
+
   private val qrScanner = registerForActivityResult(ScanContract()) { result ->
     DeviceQrScanner.complete(result.contents)
   }
@@ -37,5 +43,9 @@ class MainActivity : TauriActivity() {
 
   fun launchNotificationPermissionRequest() {
     notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+  }
+
+  fun launchLocalNetworkPermissionRequest() {
+    localNetworkPermission.launch(Manifest.permission.NEARBY_WIFI_DEVICES)
   }
 }

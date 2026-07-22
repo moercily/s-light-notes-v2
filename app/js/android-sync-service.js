@@ -59,6 +59,9 @@
         requestNotificationPermission() {
             return invoke('android_request_notification_permission');
         },
+        requestLocalNetworkPermission() {
+            return invoke('android_request_local_network_permission');
+        },
         openBatterySettings() {
             return invoke('android_open_battery_settings');
         },

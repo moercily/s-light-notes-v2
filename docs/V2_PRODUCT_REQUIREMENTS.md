@@ -33,6 +33,7 @@ s-light notes v2 is a P2P synced Markdown notes app. Notes remain ordinary `.md`
 - Continuing a bounded synchronization session after leaving the app is an explicit user choice and requires notification permission. Denial leaves foreground editing and synchronization available.
 - The app may open Android battery settings for explanation and recovery, but does not request exemption from system battery optimization.
 - Android remains editable when the engine is stopped or camera, notification, and background execution access is unavailable.
+- On Android 16+, P2P startup requests nearby-device access only after the user taps the sync start action. Denial or later revocation stops P2P but does not block local notes, and the permission is explicitly marked as not used for location.
 - iOS may embed an adapted Syncthing engine, but only promises foreground and opportunistic background synchronization.
 - Möbius Sync or file import/export remains an iOS fallback until the in-app engine is validated.
 

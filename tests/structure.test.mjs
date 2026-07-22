@@ -32,6 +32,7 @@ const v2MustExist = [
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/AndroidSyncPolicy.kt',
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/OpportunisticSyncWorker.kt',
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/NotificationPermissionCoordinator.kt',
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/LocalNetworkPermissionCoordinator.kt',
   'src-tauri/gen/android/app/src/main/assets/notices/ZXING_NOTICE.txt',
   'src-tauri/src/android.rs',
   'src-tauri/src/desktop.rs',
@@ -163,6 +164,8 @@ const androidEngine = readFileSync(
 assert.match(androidManifest, /FOREGROUND_SERVICE_DATA_SYNC/);
 assert.match(androidManifest, /SyncthingForegroundService/);
 assert.match(androidManifest, /android\.permission\.CAMERA/);
+assert.match(androidManifest, /android\.permission\.NEARBY_WIFI_DEVICES/);
+assert.match(androidManifest, /neverForLocation/);
 assert.doesNotMatch(androidManifest, /BOOT_COMPLETED|MANAGE_EXTERNAL_STORAGE/);
 assert.doesNotMatch(androidManifest, /REQUEST_IGNORE_BATTERY_OPTIMIZATIONS/);
 assert.match(androidBuild, /androidx\.work:work-runtime-ktx:2\.10\.1/);
@@ -176,6 +179,7 @@ const opportunityWorker = readFileSync(
 );
 assert.match(androidPolicy, /Settings\.Global\.BOOT_COUNT/);
 assert.match(opportunityWorker, /wasOpenedThisBoot/);
+assert.match(opportunityWorker, /hasLocalNetworkPermission/);
 assert.match(androidEngine, /127\.0\.0\.1:8386/);
 assert.match(androidEngine, /STGUIAPIKEY/);
 assert.doesNotMatch(androidEngine, /0\.0\.0\.0:8386/);

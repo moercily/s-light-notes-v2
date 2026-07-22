@@ -40,6 +40,7 @@ async function testAvailabilityAndNativeBoundary() {
     backgroundSessionEnabled: true,
   });
   await service.requestNotificationPermission();
+  await service.requestLocalNetworkPermission();
   await service.openBatterySettings();
 
   assert.deepEqual(calls.map(call => call.command), [
@@ -54,6 +55,7 @@ async function testAvailabilityAndNativeBoundary() {
     'android_get_background_policy',
     'android_set_background_policy',
     'android_request_notification_permission',
+    'android_request_local_network_permission',
     'android_open_battery_settings',
   ]);
   assert.deepEqual(JSON.parse(JSON.stringify(calls[4].payload)), {

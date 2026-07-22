@@ -75,6 +75,9 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
 
     @Command
     fun startEngine(invoke: Invoke) = resolve(invoke) {
+        require(AndroidSyncPolicy.hasLocalNetworkPermission(appActivity)) {
+            "请先允许附近设备权限，再启动 P2P 同步。"
+        }
         SyncthingForegroundService.start(appActivity)
         engineStatusToJson(SyncthingEngine.snapshot())
     }
@@ -141,6 +144,16 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
             return
         }
         NotificationPermissionCoordinator.request(mainActivity, invoke)
+    }
+
+    @Command
+    fun requestLocalNetworkPermission(invoke: Invoke) {
+        val mainActivity = appActivity as? MainActivity
+        if (mainActivity == null) {
+            invoke.reject("当前 Android 页面无法请求局域网权限。")
+            return
+        }
+        LocalNetworkPermissionCoordinator.request(mainActivity, invoke)
     }
 
     @Command
@@ -233,6 +246,8 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
             put("deviceId", status.deviceId ?: JSONObject.NULL)
             put("folderId", SyncthingEngine.NOTES_FOLDER_ID)
             put("version", SyncthingEngine.VERSION)
+            put("localNetworkPermissionRequired", AndroidSyncPolicy.requiresLocalNetworkPermission())
+            put("localNetworkPermissionGranted", AndroidSyncPolicy.hasLocalNetworkPermission(appActivity))
         }
     }
 

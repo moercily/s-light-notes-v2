@@ -82,6 +82,8 @@ struct AndroidSyncStatus {
     device_id: Option<String>,
     folder_id: String,
     version: String,
+    local_network_permission_required: bool,
+    local_network_permission_granted: bool,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -278,6 +280,14 @@ fn android_request_notification_permission(
 }
 
 #[tauri::command]
+fn android_request_local_network_permission(
+    native: State<'_, AndroidNative>,
+) -> Result<bool, String> {
+    let response: PermissionResponse = native_call(&native, "requestLocalNetworkPermission", ())?;
+    Ok(response.granted)
+}
+
+#[tauri::command]
 fn android_open_battery_settings(native: State<'_, AndroidNative>) -> Result<bool, String> {
     let response: OpenedResponse = native_call(&native, "openBatterySettings", ())?;
     Ok(response.opened)
@@ -329,6 +339,7 @@ pub fn run() {
             android_get_background_policy,
             android_set_background_policy,
             android_request_notification_permission,
+            android_request_local_network_permission,
             android_open_battery_settings
         ])
         .run(tauri::generate_context!())

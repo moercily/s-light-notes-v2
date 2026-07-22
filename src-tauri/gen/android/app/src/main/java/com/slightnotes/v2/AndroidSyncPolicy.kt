@@ -112,6 +112,15 @@ object AndroidSyncPolicy {
                 Manifest.permission.POST_NOTIFICATIONS,
             ) == PackageManager.PERMISSION_GRANTED
 
+    fun requiresLocalNetworkPermission(): Boolean = Build.VERSION.SDK_INT >= 36
+
+    fun hasLocalNetworkPermission(context: Context): Boolean =
+        !requiresLocalNetworkPermission() ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.NEARBY_WIFI_DEVICES,
+            ) == PackageManager.PERMISSION_GRANTED
+
     fun openBatterySettings(context: Context) {
         val settingsIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -177,7 +186,12 @@ object AndroidAppRuntime : DefaultLifecycleObserver {
     override fun onStart(owner: LifecycleOwner) {
         foreground = true
         AndroidSyncPolicy.initialize(appContext)
-        SyncthingForegroundService.start(appContext)
+        if (AndroidSyncPolicy.hasLocalNetworkPermission(appContext)) {
+            SyncthingForegroundService.start(appContext)
+        } else {
+            AndroidSyncPolicy.recordStopReason(appContext, "localNetworkPermission")
+            SyncthingForegroundService.stop(appContext, "localNetworkPermission")
+        }
     }
 
     override fun onStop(owner: LifecycleOwner) {

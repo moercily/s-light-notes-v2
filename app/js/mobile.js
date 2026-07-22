@@ -16,6 +16,7 @@ const AppState = {
     _installPrompt: null,
     _view: 'list',
     _pairingPreview: null,
+    _syncStatus: null,
 };
 
 async function initMobileApp() {
@@ -97,6 +98,18 @@ async function refreshMobileSyncCenter() {
     setMobileSyncMessage('正在检查', '正在读取本机同步引擎状态。');
     try {
         const status = await window.androidSync.getStatus();
+        AppState._syncStatus = status;
+        if (status.localNetworkPermissionRequired && !status.localNetworkPermissionGranted) {
+            setMobileSyncMessage(
+                '需要局域网权限',
+                '允许附近设备后，才能发现并连接你的其他设备。笔记编辑不受影响。',
+            );
+            $('#mobile-sync-start').disabled = false;
+            $('#mobile-sync-stop').disabled = true;
+            $('#mobile-sync-scan-folder').disabled = true;
+            clearMobilePairingInfo();
+            return;
+        }
         const stateLabels = {
             stopped: '已停止',
             starting: '正在启动',
@@ -162,6 +175,17 @@ function renderMobilePairingInfo(info) {
 async function onMobileSyncStart() {
     setMobileSyncMessage('正在启动', '正在启动本机 P2P 同步引擎。');
     try {
+        const status = AppState._syncStatus || await window.androidSync.getStatus();
+        if (status.localNetworkPermissionRequired && !status.localNetworkPermissionGranted) {
+            const granted = await window.androidSync.requestLocalNetworkPermission();
+            if (!granted) {
+                setMobileSyncMessage(
+                    '未允许局域网同步',
+                    '你仍可正常编辑笔记，稍后可再次点击“启动同步”授权。',
+                );
+                return;
+            }
+        }
         await window.androidSync.startEngine();
         setTimeout(refreshMobileSyncCenter, 800);
     } catch (err) {
@@ -263,6 +287,7 @@ function renderMobileBackgroundPolicy(policy) {
         backgroundPolicy: '持续后台同步已关闭。',
         notification: '已从系统通知停止同步。',
         systemTimeout: 'Android 已结束本次后台同步，请打开应用后继续。',
+        localNetworkPermission: '需要允许附近设备后才能进行 P2P 同步。',
         opportunisticComplete: '最近一次短时机会同步已完成。',
         opportunisticFailed: '最近一次短时机会同步未完成，将由系统稍后重试。',
         user: '同步已由你手动停止。',

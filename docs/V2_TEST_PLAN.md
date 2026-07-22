@@ -210,6 +210,16 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - API 35+ timeout, notification stop, app-background stop, policy stop, and opportunity-completion reasons are persisted for the sync-center status.
 - Frontend tests and arm64/x86-64 Kotlin compilation and unit tests pass. Real notification denial, QR activity transition, WorkManager execution timing, API timeout, force-stop, and power behavior remain emulator/phone acceptance work.
 
+### Android 16 Local Network Compatibility
+
+- Install the API 36 build, enable local-network protection with `adb shell am compat enable RESTRICT_LOCAL_NETWORK com.slightnotes.v2`, and reboot the device or emulator.
+- Before permission is granted, verify the app remains editable, reports that nearby-device access is required, and does not start the native engine from app lifecycle, manual start, or WorkManager.
+- Tap **Start Sync**, deny nearby-device access, and verify local editing remains usable and the action can be retried.
+- Tap **Start Sync** again, grant nearby-device access, and verify engine startup, Syncthing discovery, incoming connections, and direct LAN transfer.
+- Revoke Nearby devices in system settings while the app is backgrounded; reopen the app and verify the managed engine stops and returns to the permission-required state.
+- Confirm the merged manifest includes `NEARBY_WIFI_DEVICES` with `neverForLocation`, and does not include fine/coarse/background location permissions.
+- Restore the default compatibility state after testing with `adb shell am compat disable RESTRICT_LOCAL_NETWORK com.slightnotes.v2`.
+
 - Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
 - Android emulator gate: install and launch on an API 36 x86-64 image; verify 320px-430px layout, safe areas, keyboard, rotation, Android back handling, and no horizontal overflow.
 - Android storage gate: create, save, reopen, trash, restore, permanently delete, and externally read/edit Markdown through the system `DocumentsProvider`.

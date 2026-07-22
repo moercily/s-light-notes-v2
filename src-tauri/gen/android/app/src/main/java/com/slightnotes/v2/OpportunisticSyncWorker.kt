@@ -12,6 +12,7 @@ class OpportunisticSyncWorker(
     override fun doWork(): Result {
         val policy = AndroidSyncPolicy.get(applicationContext)
         if (!AndroidSyncPolicy.wasOpenedThisBoot(applicationContext) ||
+            !AndroidSyncPolicy.hasLocalNetworkPermission(applicationContext) ||
             !policy.opportunisticSync ||
             policy.backgroundSessionEnabled ||
             AndroidAppRuntime.isForeground()
