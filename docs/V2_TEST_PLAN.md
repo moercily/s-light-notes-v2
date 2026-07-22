@@ -237,6 +237,8 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Paired the Android runtime with an isolated packaged desktop Syncthing peer using the app's manual device-code confirmation. A note created on Android arrived on desktop, and a desktop-created note arrived in the Android private Markdown directory.
 - Stopped synchronization, edited the same two notes independently on both peers, reconnected, and verified real `.sync-conflict-*` files appeared on both sides and in the app's conflict workflow.
 - Verified camera denial keeps the pairing screen usable, and portrait plus low-height landscape screenshots retain status-bar separation and usable controls.
+- Final regression passed `npm test`, all 31 Rust tests, arm64/x86-64 Kotlin unit tests, both split debug APK builds through the Tauri Android entry point, and macOS application packaging. Reinstalling the final arm64 APK over the tested app preserved notes, conflicts, and the existing Syncthing identity.
+- Final debug artifacts: `app-arm64-debug.apk` SHA-256 `4cc901f48b9f1b66267ce09002b21b440f0099a3f836bd8ccbe82e45c6fd563c`; `app-x86_64-debug.apk` SHA-256 `6e3297ac39ed9ae21065205d0bf626e973311b74ee9312e88587250c5ffd1854`.
 - Not yet passed: actual QR capture, x86-64 emulator runtime, naturally scheduled WorkManager exchange, physical arm64 phone battery/network/file-provider tests, release signing, and store packaging.
 
 - Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
