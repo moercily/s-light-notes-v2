@@ -163,7 +163,7 @@ Exit condition: a two-device test record contains successful create, update, off
 
 - `[x]` Display the local device code as an offline QR image.
 - `[x]` Retain manual copy and manual entry as a fallback.
-- `[ ]` Define camera permission behavior separately for Android and iOS.
+- `[x]` Define camera permission behavior separately for Android and iOS.
 - `[ ]` Add QR scanning for the selected mobile platform.
 - `[ ]` Reject malformed or unsupported scanned data before any configuration write.
 - `[ ]` Keep the same preview, second confirmation, folder scope, and rollback rules for scanned codes.
@@ -189,15 +189,17 @@ QR scanning is blocked until the mobile shell and permission model are selected.
 - `[x]` Target Android 16/API 36, minimum API 26, and the `arm64-v8a` and `x86_64` ABIs using NDK 28 or newer.
 - `[x]` Store real Markdown files in an application-owned directory and expose only notes through an Android `DocumentsProvider`.
 - `[x]` Build pinned Syncthing v2.1.2 Android native artifacts with recorded source, checksums, license, ABI, and 16 KB page compatibility.
-- `[ ]` Implement foreground-service lifecycle, bounded WorkManager synchronization, notification handling, and API 35+ timeout cleanup.
-- `[ ]` Keep foreground editing usable when notification, camera, or background execution permission is unavailable.
-- `[ ]` Add offline QR scanning with manual device-code fallback and preserve preview/confirmation/rollback rules.
+- `[x]` Implement foreground-service lifecycle, bounded WorkManager synchronization, notification handling, and API 35+ timeout cleanup.
+- `[x]` Keep foreground editing usable when notification, camera, or background execution permission is unavailable.
+- `[x]` Add offline QR scanning with manual device-code fallback and preserve preview/confirmation/rollback rules.
 - `[ ]` Pair Android with a desktop device and validate create/update/offline/conflict flows.
 - `[ ]` Document the behavior when the user force-stops the Android synchronization service.
 
 Android implementation checkpoint (2026-07-21): the dedicated Tauri project, platform split, native Markdown store, `DocumentsProvider`, mobile layout, and both pinned Syncthing engine artifacts are implemented. The arm64 and x86-64 artifacts are Android PIE executables packaged under `jniLibs` with the `.so` suffix used by the established Android wrapper pattern; they are managed as child processes and are not JNI libraries. Both ABI builds compile and package successfully. Foreground-service source and API 35+ timeout cleanup are present, but runtime service, permission, background, and P2P acceptance remain open until an emulator or connected device is available.
 
 Android pairing checkpoint (2026-07-22): the dedicated mobile sync center, safe status model, manual device-code flow, offline ZXing QR scanner entry, five-minute single-use confirmation, folder sharing, readback, and rollback are implemented. JavaScript cannot provide API credentials, management addresses, note paths, device addresses, or raw Syncthing configuration. arm64 and x86-64 APK builds, both Kotlin test variants, and 320px/390px/landscape browser layout checks pass. Camera permission, actual QR capture, native engine launch, two-device confirmation, and transfer remain real-device acceptance items and are not marked complete from source/build validation alone.
+
+Android background-policy checkpoint (current branch): process-level foreground detection now keeps synchronization active across in-app activities such as QR scanning. Leaving the app stops the continuous engine by default. AndroidX WorkManager 2.10.1 schedules a unique one-hour best-effort task with a 15-minute flex window, battery-not-low constraint, and unmetered network by default; the worker starts the engine only for a bounded scan/exchange window and refuses to run until the user has opened the app during the current system boot. A separately controlled background session requires notification permission, remains user-visible, uses `START_NOT_STICKY`, and records notification, policy, opportunity-completion, and API 35+ timeout stop reasons. No app-owned boot receiver or battery-optimization exemption request is added. Frontend tests and both ABI Kotlin unit-test variants pass; notification denial, system timeout, force-stop, WorkManager execution, and battery behavior remain device acceptance items.
 
 Android branch and delivery policy:
 
@@ -250,7 +252,7 @@ The next implementation sessions should use this order:
 3. Separate desktop and Android configuration and prove desktop regression gates still pass.
 4. Add Android native Markdown storage, `DocumentsProvider`, and the dedicated mobile interface.
 5. Build the pinned Android Syncthing engine and add its foreground-service lifecycle.
-6. Add Android pairing, QR scanning, background policy, and real Android-to-desktop tests.
+6. Validate Android pairing, QR scanning, background policy, and real Android-to-desktop transfer on an API 36 emulator and arm64 phone.
 
 ## 13. Change and Commit Rules
 

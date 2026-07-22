@@ -29,6 +29,9 @@ const v2MustExist = [
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/SyncthingEngine.kt',
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/SyncthingForegroundService.kt',
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/DeviceQrScanner.kt',
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/AndroidSyncPolicy.kt',
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/OpportunisticSyncWorker.kt',
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/NotificationPermissionCoordinator.kt',
   'src-tauri/gen/android/app/src/main/assets/notices/ZXING_NOTICE.txt',
   'src-tauri/src/android.rs',
   'src-tauri/src/desktop.rs',
@@ -161,11 +164,32 @@ assert.match(androidManifest, /FOREGROUND_SERVICE_DATA_SYNC/);
 assert.match(androidManifest, /SyncthingForegroundService/);
 assert.match(androidManifest, /android\.permission\.CAMERA/);
 assert.doesNotMatch(androidManifest, /BOOT_COMPLETED|MANAGE_EXTERNAL_STORAGE/);
+assert.doesNotMatch(androidManifest, /REQUEST_IGNORE_BATTERY_OPTIMIZATIONS/);
+assert.match(androidBuild, /androidx\.work:work-runtime-ktx:2\.10\.1/);
+const androidPolicy = readFileSync(
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/AndroidSyncPolicy.kt',
+  'utf8'
+);
+const opportunityWorker = readFileSync(
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/OpportunisticSyncWorker.kt',
+  'utf8'
+);
+assert.match(androidPolicy, /Settings\.Global\.BOOT_COUNT/);
+assert.match(opportunityWorker, /wasOpenedThisBoot/);
 assert.match(androidEngine, /127\.0\.0\.1:8386/);
 assert.match(androidEngine, /STGUIAPIKEY/);
 assert.doesNotMatch(androidEngine, /0\.0\.0\.0:8386/);
 assert.match(androidEngine, /confirmationToken|PendingPairing/);
 assert.doesNotMatch(mobileJs, /apiKey|127\.0\.0\.1:8386|STGUIAPIKEY/);
+for (const id of [
+  'mobile-opportunistic-sync',
+  'mobile-unmetered-only',
+  'mobile-background-session',
+  'mobile-request-notification',
+  'mobile-open-battery-settings',
+]) {
+  assert.match(mobileHtml, new RegExp(`id=["']${id}["']`), `${id} should exist in Android sync policy UI`);
+}
 for (const id of [
   'sync-advanced-connection',
   'sync-binding-panel',

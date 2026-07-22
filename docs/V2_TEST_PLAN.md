@@ -200,6 +200,16 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - The sync center has no horizontal overflow at 320x640, 390x844, or 844x390; long device codes wrap and all tested controls retain at least 44px touch height.
 - Camera denial, scan cancellation, successful QR capture, two-device mutual confirmation, and real file transfer remain emulator/phone acceptance work.
 
+### Android Background Policy Build Checkpoint - Current Branch
+
+- Background policy controls cover opportunity sync, unmetered-only behavior, explicit continued-background sessions, notification permission, and the system battery-settings entry.
+- Kotlin unit tests verify that continued-background sessions cannot become active without notification permission and that network settings map only to `UNMETERED` or `CONNECTED` WorkManager constraints.
+- The unique periodic worker is constrained by battery-not-low and defaults to a one-hour interval with a 15-minute flex window. It does not start a second engine while the app or a visible background session already owns synchronization.
+- WorkManager scheduler metadata may survive a reboot, but a boot-count gate prevents the worker from starting Syncthing until the app has been opened during the current boot.
+- Process lifecycle handling keeps app-owned QR scanning from being treated as a true background transition. Leaving the application stops continuous synchronization unless the user enabled the notified session.
+- API 35+ timeout, notification stop, app-background stop, policy stop, and opportunity-completion reasons are persisted for the sync-center status.
+- Frontend tests and arm64/x86-64 Kotlin compilation and unit tests pass. Real notification denial, QR activity transition, WorkManager execution timing, API timeout, force-stop, and power behavior remain emulator/phone acceptance work.
+
 - Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
 - Android emulator gate: install and launch on an API 36 x86-64 image; verify 320px-430px layout, safe areas, keyboard, rotation, Android back handling, and no horizontal overflow.
 - Android storage gate: create, save, reopen, trash, restore, permanently delete, and externally read/edit Markdown through the system `DocumentsProvider`.

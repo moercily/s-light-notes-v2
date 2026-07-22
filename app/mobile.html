@@ -119,6 +119,27 @@
                     </ul>
                     <p id="mobile-folder-state">笔记文件夹：等待状态</p>
                 </section>
+
+                <section class="sync-section" aria-labelledby="mobile-background-title">
+                    <h2 id="mobile-background-title">后台同步</h2>
+                    <label class="sync-toggle-row" for="mobile-opportunistic-sync">
+                        <span><strong>机会同步</strong><small>系统安排短时同步，不会全天驻留</small></span>
+                        <input id="mobile-opportunistic-sync" type="checkbox">
+                    </label>
+                    <label class="sync-toggle-row" for="mobile-unmetered-only">
+                        <span><strong>仅非计费网络</strong><small>避免使用移动流量执行机会同步</small></span>
+                        <input id="mobile-unmetered-only" type="checkbox">
+                    </label>
+                    <label class="sync-toggle-row" for="mobile-background-session">
+                        <span><strong>离开应用后继续</strong><small>需要通知权限，并显示持续同步通知</small></span>
+                        <input id="mobile-background-session" type="checkbox">
+                    </label>
+                    <p id="mobile-background-message">正在读取后台策略。</p>
+                    <div class="sync-actions">
+                        <button id="mobile-request-notification" type="button">允许同步通知</button>
+                        <button id="mobile-open-battery-settings" type="button">电池设置</button>
+                    </div>
+                </section>
             </div>
         </section>
     </main>

@@ -45,6 +45,13 @@ class PairingConfirmArgs {
     lateinit var confirmationToken: String
 }
 
+@InvokeArg
+class BackgroundPolicyArgs {
+    var opportunisticSync: Boolean = true
+    var unmeteredOnly: Boolean = true
+    var backgroundSessionEnabled: Boolean = false
+}
+
 @TauriPlugin
 class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
     private val appActivity = activity
@@ -108,6 +115,38 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
             return
         }
         DeviceQrScanner.start(mainActivity, invoke)
+    }
+
+    @Command
+    fun getBackgroundPolicy(invoke: Invoke) = resolve(invoke) {
+        backgroundPolicyToJson(AndroidSyncPolicy.get(appActivity))
+    }
+
+    @Command
+    fun setBackgroundPolicy(invoke: Invoke) = resolve(invoke) {
+        val args = invoke.parseArgs(BackgroundPolicyArgs::class.java)
+        backgroundPolicyToJson(AndroidSyncPolicy.set(
+            appActivity,
+            args.opportunisticSync,
+            args.unmeteredOnly,
+            args.backgroundSessionEnabled,
+        ))
+    }
+
+    @Command
+    fun requestNotificationPermission(invoke: Invoke) {
+        val mainActivity = appActivity as? MainActivity
+        if (mainActivity == null) {
+            invoke.reject("当前 Android 页面无法请求通知权限。")
+            return
+        }
+        NotificationPermissionCoordinator.request(mainActivity, invoke)
+    }
+
+    @Command
+    fun openBatterySettings(invoke: Invoke) = resolve(invoke) {
+        AndroidSyncPolicy.openBatterySettings(appActivity)
+        JSObject().put("opened", true)
     }
 
     @Command
@@ -194,6 +233,16 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
             put("deviceId", status.deviceId ?: JSONObject.NULL)
             put("folderId", SyncthingEngine.NOTES_FOLDER_ID)
             put("version", SyncthingEngine.VERSION)
+        }
+    }
+
+    private fun backgroundPolicyToJson(policy: BackgroundPolicySnapshot): JSObject {
+        return JSObject().apply {
+            put("opportunisticSync", policy.opportunisticSync)
+            put("unmeteredOnly", policy.unmeteredOnly)
+            put("backgroundSessionEnabled", policy.backgroundSessionEnabled)
+            put("notificationPermissionGranted", policy.notificationPermissionGranted)
+            put("lastStopReason", policy.lastStopReason)
         }
     }
 }

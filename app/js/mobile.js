@@ -68,6 +68,11 @@ function bindMobileEvents() {
     $('#mobile-scan-device-qr').addEventListener('click', onMobileScanDeviceQr);
     $('#mobile-preview-pairing').addEventListener('click', onMobilePreviewPairing);
     $('#mobile-confirm-pairing').addEventListener('click', onMobileConfirmPairing);
+    $('#mobile-opportunistic-sync').addEventListener('change', onMobileBackgroundPolicyChange);
+    $('#mobile-unmetered-only').addEventListener('change', onMobileBackgroundPolicyChange);
+    $('#mobile-background-session').addEventListener('change', onMobileBackgroundPolicyChange);
+    $('#mobile-request-notification').addEventListener('click', onMobileRequestNotificationPermission);
+    $('#mobile-open-battery-settings').addEventListener('click', onMobileOpenBatterySettings);
     window.addEventListener('beforeinstallprompt', onMobileBeforeInstallPrompt);
     document.addEventListener('visibilitychange', onMobileVisibilityChange);
 
@@ -84,7 +89,7 @@ function initMobileSyncEntry() {
 
 async function openMobileSyncCenter() {
     showMobileView('sync');
-    await refreshMobileSyncCenter();
+    await Promise.all([refreshMobileSyncCenter(), refreshMobileBackgroundPolicy()]);
 }
 
 async function refreshMobileSyncCenter() {
@@ -239,10 +244,83 @@ async function onMobileConfirmPairing() {
     }
 }
 
+async function refreshMobileBackgroundPolicy() {
+    try {
+        const policy = await window.androidSync.getBackgroundPolicy();
+        renderMobileBackgroundPolicy(policy);
+    } catch (err) {
+        $('#mobile-background-message').textContent = err.message || String(err);
+    }
+}
+
+function renderMobileBackgroundPolicy(policy) {
+    $('#mobile-opportunistic-sync').checked = Boolean(policy.opportunisticSync);
+    $('#mobile-unmetered-only').checked = Boolean(policy.unmeteredOnly);
+    $('#mobile-background-session').checked = Boolean(policy.backgroundSessionEnabled);
+    $('#mobile-request-notification').hidden = Boolean(policy.notificationPermissionGranted);
+    const stopReasons = {
+        appBackground: '当前设置会在离开应用后停止持续同步。',
+        backgroundPolicy: '持续后台同步已关闭。',
+        notification: '已从系统通知停止同步。',
+        systemTimeout: 'Android 已结束本次后台同步，请打开应用后继续。',
+        opportunisticComplete: '最近一次短时机会同步已完成。',
+        opportunisticFailed: '最近一次短时机会同步未完成，将由系统稍后重试。',
+        user: '同步已由你手动停止。',
+    };
+    $('#mobile-background-message').textContent =
+        stopReasons[policy.lastStopReason] ||
+        (policy.backgroundSessionEnabled
+            ? '离开应用后将继续同步，并显示系统通知。'
+            : '应用打开时持续同步，离开后由系统安排短时机会同步。');
+}
+
+async function onMobileBackgroundPolicyChange(event) {
+    const backgroundToggle = $('#mobile-background-session');
+    if (event.target === backgroundToggle && backgroundToggle.checked) {
+        const granted = await window.androidSync.requestNotificationPermission();
+        if (!granted) {
+            backgroundToggle.checked = false;
+            $('#mobile-background-message').textContent =
+                '未获得通知权限，应用打开时仍可正常同步。';
+        }
+    }
+    try {
+        const policy = await window.androidSync.setBackgroundPolicy({
+            opportunisticSync: $('#mobile-opportunistic-sync').checked,
+            unmeteredOnly: $('#mobile-unmetered-only').checked,
+            backgroundSessionEnabled: backgroundToggle.checked,
+        });
+        renderMobileBackgroundPolicy(policy);
+    } catch (err) {
+        $('#mobile-background-message').textContent = err.message || String(err);
+        await refreshMobileBackgroundPolicy();
+    }
+}
+
+async function onMobileRequestNotificationPermission() {
+    try {
+        const granted = await window.androidSync.requestNotificationPermission();
+        $('#mobile-background-message').textContent = granted
+            ? '通知权限已允许，可选择离开应用后继续同步。'
+            : '未获得通知权限，应用打开时仍可正常同步。';
+        await refreshMobileBackgroundPolicy();
+    } catch (err) {
+        $('#mobile-background-message').textContent = err.message || String(err);
+    }
+}
+
+async function onMobileOpenBatterySettings() {
+    try {
+        await window.androidSync.openBatterySettings();
+    } catch (err) {
+        $('#mobile-background-message').textContent = err.message || String(err);
+    }
+}
+
 async function onMobileVisibilityChange() {
     if (document.visibilityState !== 'visible') return;
     if (AppState._view === 'sync') {
-        await refreshMobileSyncCenter();
+        await Promise.all([refreshMobileSyncCenter(), refreshMobileBackgroundPolicy()]);
         return;
     }
     if (AppState.storageMode !== 'android') return;

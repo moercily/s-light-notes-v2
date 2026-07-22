@@ -97,6 +97,34 @@ struct ConfirmDevicePairingRequest {
     confirmation_token: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidBackgroundPolicy {
+    opportunistic_sync: bool,
+    unmetered_only: bool,
+    background_session_enabled: bool,
+    notification_permission_granted: bool,
+    last_stop_reason: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SetAndroidBackgroundPolicyRequest {
+    opportunistic_sync: bool,
+    unmetered_only: bool,
+    background_session_enabled: bool,
+}
+
+#[derive(Deserialize)]
+struct PermissionResponse {
+    granted: bool,
+}
+
+#[derive(Deserialize)]
+struct OpenedResponse {
+    opened: bool,
+}
+
 fn android_native_plugin() -> TauriPlugin<Wry> {
     Builder::<Wry>::new("android-native")
         .setup(|app, api| {
@@ -226,6 +254,35 @@ fn android_scan_device_qr(native: State<'_, AndroidNative>) -> Result<serde_json
     native_call(&native, "scanDeviceQr", ())
 }
 
+#[tauri::command]
+fn android_get_background_policy(
+    native: State<'_, AndroidNative>,
+) -> Result<AndroidBackgroundPolicy, String> {
+    native_call(&native, "getBackgroundPolicy", ())
+}
+
+#[tauri::command]
+fn android_set_background_policy(
+    native: State<'_, AndroidNative>,
+    request: SetAndroidBackgroundPolicyRequest,
+) -> Result<AndroidBackgroundPolicy, String> {
+    native_call(&native, "setBackgroundPolicy", request)
+}
+
+#[tauri::command]
+fn android_request_notification_permission(
+    native: State<'_, AndroidNative>,
+) -> Result<bool, String> {
+    let response: PermissionResponse = native_call(&native, "requestNotificationPermission", ())?;
+    Ok(response.granted)
+}
+
+#[tauri::command]
+fn android_open_battery_settings(native: State<'_, AndroidNative>) -> Result<bool, String> {
+    let response: OpenedResponse = native_call(&native, "openBatterySettings", ())?;
+    Ok(response.opened)
+}
+
 fn storage_target_call(
     native: &AndroidNative,
     command: &str,
@@ -268,7 +325,11 @@ pub fn run() {
             syncthing_preview_device_pairing,
             syncthing_confirm_device_pairing,
             syncthing_scan_folder,
-            android_scan_device_qr
+            android_scan_device_qr,
+            android_get_background_policy,
+            android_set_background_policy,
+            android_request_notification_permission,
+            android_open_battery_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running s-light notes on Android");

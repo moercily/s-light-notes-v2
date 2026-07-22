@@ -507,3 +507,42 @@ button {
     white-space: nowrap;
     font-size: 14px;
 }
+
+.sync-section .sync-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 56px;
+    margin: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sync-section .sync-toggle-row span {
+    min-width: 0;
+}
+
+.sync-section .sync-toggle-row strong,
+.sync-section .sync-toggle-row small {
+    display: block;
+}
+
+.sync-section .sync-toggle-row strong {
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.sync-section .sync-toggle-row small {
+    margin-top: 2px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.sync-section .sync-toggle-row input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    accent-color: var(--accent);
+}

@@ -49,14 +49,16 @@ mobile.html
 
 ## Android Lifecycle
 
-- Opening the app starts the managed engine after native paths and credentials are ready.
+- Process-level lifecycle observation starts the managed engine when the application becomes visible and avoids treating an in-app QR activity transition as leaving the application.
 - While the app is visible, synchronization remains active without requiring broad storage access.
-- A user-started `dataSync` foreground service keeps a bounded background session alive and always shows a notification with a stop action.
-- WorkManager provides short, best-effort synchronization on an unmetered network; it does not simulate an always-running daemon.
+- Leaving the app stops continuous synchronization by default. A user-enabled `dataSync` foreground service may keep a bounded background session alive only after notification permission is granted and always provides a stop action.
+- AndroidX WorkManager 2.10.1 owns one unique periodic task. It runs at most once per one-hour interval with a 15-minute flex window, requires battery-not-low, and uses `UNMETERED` by default or `CONNECTED` after an explicit user setting change.
+- The worker skips execution while the application or a user-enabled background session already owns the engine. Otherwise it starts the engine, waits for readiness, scans the fixed notes folder, permits a short exchange window, and stops it.
 - API 35+ timeout callbacks stop the engine before the platform declares an ANR and record a user-visible reason.
-- The app does not start a data-sync foreground service from `BOOT_COMPLETED`.
+- The app has no boot receiver and never starts its engine or `dataSync` foreground service from `BOOT_COMPLETED`. WorkManager's library components may restore scheduler metadata, but the worker compares Android's boot count and exits until the user opens the app during that boot.
 - Force-stop terminates service and scheduled work. Nothing silently restarts until the user opens the app again.
 - Camera denial preserves manual device-code entry; notification denial preserves foreground synchronization.
+- Battery settings use the general system settings screen. The package does not declare `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` or directly request an exemption.
 
 ## Android Native Boundary
 
@@ -91,6 +93,9 @@ mobile.html
 - `desktop_move_to_trash`: moves a note into the local `.trash` directory.
 - `desktop_restore_note`: restores a note from `.trash`.
 - `desktop_delete_note`: permanently deletes a note from `.trash`.
+- Android-only `android_get_background_policy` and `android_set_background_policy`: read and update constrained opportunity/background choices without exposing native credentials or paths.
+- Android-only `android_request_notification_permission`: requests notification access only after a user action and returns a boolean result.
+- Android-only `android_open_battery_settings`: opens system battery settings without requesting an optimization exemption.
 
 ## Desktop Storage Boundary
 

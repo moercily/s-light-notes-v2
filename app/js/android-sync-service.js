@@ -44,5 +44,23 @@
         scanDeviceQr() {
             return invoke('android_scan_device_qr');
         },
+        getBackgroundPolicy() {
+            return invoke('android_get_background_policy');
+        },
+        setBackgroundPolicy(policy) {
+            return invoke('android_set_background_policy', {
+                request: {
+                    opportunisticSync: Boolean(policy.opportunisticSync),
+                    unmeteredOnly: Boolean(policy.unmeteredOnly),
+                    backgroundSessionEnabled: Boolean(policy.backgroundSessionEnabled),
+                },
+            });
+        },
+        requestNotificationPermission() {
+            return invoke('android_request_notification_permission');
+        },
+        openBatterySettings() {
+            return invoke('android_open_battery_settings');
+        },
     };
 })();

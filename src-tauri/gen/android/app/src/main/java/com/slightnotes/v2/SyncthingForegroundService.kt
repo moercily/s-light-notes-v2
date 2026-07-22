@@ -32,9 +32,13 @@ class SyncthingForegroundService : Service() {
         }
 
         fun stop(context: Context) {
-            context.startService(
-                Intent(context, SyncthingForegroundService::class.java).setAction(ACTION_STOP),
-            )
+            stop(context, "user")
+        }
+
+        fun stop(context: Context, reason: String) {
+            AndroidSyncPolicy.recordStopReason(context, reason)
+            SyncthingEngine.stop()
+            context.stopService(Intent(context, SyncthingForegroundService::class.java))
         }
     }
 
@@ -57,6 +61,7 @@ class SyncthingForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            AndroidSyncPolicy.recordStopReason(this, "notification")
             SyncthingEngine.stop()
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf(startId)
@@ -88,6 +93,7 @@ class SyncthingForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onTimeout(startId: Int, fgsType: Int) {
+        AndroidSyncPolicy.recordStopReason(this, "systemTimeout")
         SyncthingEngine.stop()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf(startId)

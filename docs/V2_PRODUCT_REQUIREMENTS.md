@@ -29,6 +29,9 @@ s-light notes v2 is a P2P synced Markdown notes app. Notes remain ordinary `.md`
 - Android targets API 36 with API 26 as its minimum and initially supports arm64 physical devices plus x86-64 emulators.
 - Android stores real Markdown files in an application-owned directory and exposes only note files through the system document picker. It does not request broad all-files access.
 - Android foreground sync is user-visible and bounded by current platform limits. The app does not promise continuous all-day background execution or start a data-sync foreground service at boot.
+- Android runs continuous synchronization while the app is visible. By default, leaving the app stops the continuous engine and permits only short, system-scheduled opportunity sync on an unmetered network while the battery is not low.
+- Continuing a bounded synchronization session after leaving the app is an explicit user choice and requires notification permission. Denial leaves foreground editing and synchronization available.
+- The app may open Android battery settings for explanation and recovery, but does not request exemption from system battery optimization.
 - Android remains editable when the engine is stopped or camera, notification, and background execution access is unavailable.
 - iOS may embed an adapted Syncthing engine, but only promises foreground and opportunistic background synchronization.
 - Möbius Sync or file import/export remains an iOS fallback until the in-app engine is validated.
