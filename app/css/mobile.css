@@ -350,11 +350,12 @@ button {
 @media (orientation: landscape) and (max-height: 520px) {
     :root {
         --mobile-format-bar-height: 52px;
+        --landscape-safe-top: max(env(safe-area-inset-top), 24px);
     }
 
     .mobile-topbar {
-        min-height: calc(48px + env(safe-area-inset-top));
-        padding-top: calc(4px + env(safe-area-inset-top));
+        min-height: calc(48px + var(--landscape-safe-top));
+        padding-top: calc(4px + var(--landscape-safe-top));
         padding-bottom: 4px;
     }
 
