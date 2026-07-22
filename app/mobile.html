@@ -63,10 +63,62 @@
             <div class="settings-list">
                 <button id="mobile-import" class="settings-item">导入 Markdown</button>
                 <button id="mobile-export" class="settings-item">导出备份</button>
+                <button id="mobile-sync" class="settings-item" hidden>P2P 同步</button>
                 <button id="mobile-trash" class="settings-item">回收站</button>
                 <button id="mobile-install" class="settings-item" hidden>安装到主屏幕</button>
                 <button id="mobile-theme-toggle" class="settings-item">切换深色模式</button>
                 <p id="mobile-settings-note" class="settings-note">移动端当前默认使用浏览器本地存储。请定期导出备份。</p>
+            </div>
+        </section>
+
+        <section id="mobile-sync-view" class="mobile-view" aria-label="P2P 同步">
+            <header class="mobile-topbar">
+                <button id="mobile-sync-back" class="text-button">返回</button>
+                <h1>P2P 同步</h1>
+                <button id="mobile-sync-refresh" class="icon-button" title="刷新同步状态" aria-label="刷新同步状态">↻</button>
+            </header>
+            <div class="mobile-sync-scroll">
+                <section class="sync-section" aria-labelledby="mobile-sync-state-title">
+                    <h2 id="mobile-sync-state-title">本机状态</h2>
+                    <strong id="mobile-sync-state">正在检查</strong>
+                    <p id="mobile-sync-message">正在读取本机同步引擎状态。</p>
+                    <div class="sync-actions">
+                        <button id="mobile-sync-start" type="button">启动同步</button>
+                        <button id="mobile-sync-stop" type="button">停止同步</button>
+                        <button id="mobile-sync-scan-folder" type="button">扫描笔记</button>
+                    </div>
+                </section>
+
+                <section class="sync-section" aria-labelledby="mobile-device-code-title">
+                    <h2 id="mobile-device-code-title">本机设备码</h2>
+                    <code id="mobile-device-code">同步引擎就绪后显示</code>
+                    <button id="mobile-copy-device-code" class="sync-wide-button" type="button" disabled>复制设备码</button>
+                </section>
+
+                <section class="sync-section" aria-labelledby="mobile-pair-title">
+                    <h2 id="mobile-pair-title">添加设备</h2>
+                    <label for="mobile-remote-device-id">另一台设备的设备码</label>
+                    <textarea id="mobile-remote-device-id" rows="3" autocomplete="off" autocapitalize="characters" spellcheck="false"></textarea>
+                    <label for="mobile-remote-device-name">设备名称</label>
+                    <input id="mobile-remote-device-name" type="text" maxlength="64" placeholder="另一台设备">
+                    <div class="sync-actions">
+                        <button id="mobile-scan-device-qr" type="button">扫描二维码</button>
+                        <button id="mobile-preview-pairing" type="button">检查设备码</button>
+                    </div>
+                    <div id="mobile-pairing-preview" class="sync-preview" hidden>
+                        <strong id="mobile-pairing-device"></strong>
+                        <p id="mobile-pairing-summary"></p>
+                        <button id="mobile-confirm-pairing" class="sync-wide-button" type="button">确认添加并共享笔记</button>
+                    </div>
+                </section>
+
+                <section class="sync-section" aria-labelledby="mobile-devices-title">
+                    <h2 id="mobile-devices-title">已添加设备</h2>
+                    <ul id="mobile-sync-devices" class="sync-device-list">
+                        <li>暂无设备</li>
+                    </ul>
+                    <p id="mobile-folder-state">笔记文件夹：等待状态</p>
+                </section>
             </div>
         </section>
     </main>
@@ -75,6 +127,7 @@
     <script src="js/mobile-storage-service.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/editor.js"></script>
+    <script src="js/android-sync-service.js"></script>
     <script src="js/mobile.js"></script>
 </body>
 </html>

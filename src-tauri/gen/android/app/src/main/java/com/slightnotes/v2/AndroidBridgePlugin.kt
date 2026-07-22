@@ -34,6 +34,17 @@ class StorageTargetArgs {
     lateinit var id: String
 }
 
+@InvokeArg
+class PairingPreviewArgs {
+    lateinit var deviceId: String
+    var deviceName: String = ""
+}
+
+@InvokeArg
+class PairingConfirmArgs {
+    lateinit var confirmationToken: String
+}
+
 @TauriPlugin
 class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
     private val appActivity = activity
@@ -65,6 +76,38 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
     fun stopEngine(invoke: Invoke) = resolve(invoke) {
         SyncthingForegroundService.stop(appActivity)
         engineStatusToJson(SyncthingEngine.snapshot())
+    }
+
+    @Command
+    fun getPairingInfo(invoke: Invoke) = resolveAsync(invoke) {
+        SyncthingEngine.pairingInfo()
+    }
+
+    @Command
+    fun previewDevicePairing(invoke: Invoke) = resolveAsync(invoke) {
+        val args = invoke.parseArgs(PairingPreviewArgs::class.java)
+        SyncthingEngine.previewDevicePairing(args.deviceId, args.deviceName)
+    }
+
+    @Command
+    fun confirmDevicePairing(invoke: Invoke) = resolveAsync(invoke) {
+        val args = invoke.parseArgs(PairingConfirmArgs::class.java)
+        SyncthingEngine.confirmDevicePairing(args.confirmationToken)
+    }
+
+    @Command
+    fun scanNotesFolder(invoke: Invoke) = resolveAsync(invoke) {
+        SyncthingEngine.scanNotesFolder()
+    }
+
+    @Command
+    fun scanDeviceQr(invoke: Invoke) {
+        val mainActivity = appActivity as? MainActivity
+        if (mainActivity == null) {
+            invoke.reject("当前 Android 页面无法启动二维码扫描。")
+            return
+        }
+        DeviceQrScanner.start(mainActivity, invoke)
     }
 
     @Command
@@ -118,6 +161,16 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
         } catch (error: Exception) {
             invoke.reject(error.message ?: "Android 笔记存储操作失败。")
         }
+    }
+
+    private fun resolveAsync(invoke: Invoke, operation: () -> JSONObject) {
+        Thread({
+            try {
+                invoke.resolve(JSObject(operation().toString()))
+            } catch (error: Exception) {
+                invoke.reject(error.message ?: "Android 同步操作失败。")
+            }
+        }, "slight-android-command").start()
     }
 
     private fun noteToJson(note: StoredNote): JSObject {

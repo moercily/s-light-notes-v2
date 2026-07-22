@@ -1,0 +1,10 @@
+ZXing Android Embedded 4.3.0
+Copyright (C) 2012-2022 ZXing authors, Journey Mobile
+https://github.com/journeyapps/zxing-android-embedded
+
+ZXing Core 3.4.1
+Copyright (C) ZXing authors
+https://github.com/zxing/zxing
+
+Both components are licensed under the Apache License, Version 2.0:
+https://www.apache.org/licenses/LICENSE-2.0

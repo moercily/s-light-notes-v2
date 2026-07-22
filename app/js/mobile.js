@@ -15,6 +15,7 @@ const AppState = {
     _lastSavedTime: null,
     _installPrompt: null,
     _view: 'list',
+    _pairingPreview: null,
 };
 
 async function initMobileApp() {
@@ -32,6 +33,7 @@ async function initMobileApp() {
             await initIDB();
             AppState.storageMode = 'idb';
         }
+        initMobileSyncEntry();
         await refreshMobileNotes();
         setMobileSaveStatus('就绪');
     } catch (err) {
@@ -56,6 +58,16 @@ function bindMobileEvents() {
     $('#mobile-trash').addEventListener('click', onMobileToggleTrash);
     $('#mobile-install').addEventListener('click', onMobileInstall);
     $('#mobile-theme-toggle').addEventListener('click', toggleMobileTheme);
+    $('#mobile-sync').addEventListener('click', openMobileSyncCenter);
+    $('#mobile-sync-back').addEventListener('click', navigateMobileBack);
+    $('#mobile-sync-refresh').addEventListener('click', refreshMobileSyncCenter);
+    $('#mobile-sync-start').addEventListener('click', onMobileSyncStart);
+    $('#mobile-sync-stop').addEventListener('click', onMobileSyncStop);
+    $('#mobile-sync-scan-folder').addEventListener('click', onMobileScanFolder);
+    $('#mobile-copy-device-code').addEventListener('click', onMobileCopyDeviceCode);
+    $('#mobile-scan-device-qr').addEventListener('click', onMobileScanDeviceQr);
+    $('#mobile-preview-pairing').addEventListener('click', onMobilePreviewPairing);
+    $('#mobile-confirm-pairing').addEventListener('click', onMobileConfirmPairing);
     window.addEventListener('beforeinstallprompt', onMobileBeforeInstallPrompt);
     document.addEventListener('visibilitychange', onMobileVisibilityChange);
 
@@ -64,8 +76,176 @@ function bindMobileEvents() {
     });
 }
 
+function initMobileSyncEntry() {
+    const available = AppState.storageMode === 'android' &&
+        window.androidSync && window.androidSync.isAvailable();
+    $('#mobile-sync').hidden = !available;
+}
+
+async function openMobileSyncCenter() {
+    showMobileView('sync');
+    await refreshMobileSyncCenter();
+}
+
+async function refreshMobileSyncCenter() {
+    if (!window.androidSync || !window.androidSync.isAvailable()) return;
+    setMobileSyncMessage('正在检查', '正在读取本机同步引擎状态。');
+    try {
+        const status = await window.androidSync.getStatus();
+        const stateLabels = {
+            stopped: '已停止',
+            starting: '正在启动',
+            running: '同步中',
+            stopping: '正在停止',
+            error: '需要处理',
+        };
+        setMobileSyncMessage(stateLabels[status.engineState] || '未知状态', status.message || '');
+        $('#mobile-sync-start').disabled = status.running || status.engineState === 'starting';
+        $('#mobile-sync-stop').disabled = status.engineState === 'stopped';
+        $('#mobile-sync-scan-folder').disabled = !status.running;
+        if (!status.running) {
+            clearMobilePairingInfo();
+            if (status.engineState === 'starting' || status.engineState === 'stopping') {
+                setTimeout(refreshMobileSyncCenter, 800);
+            }
+            return;
+        }
+        const info = await window.androidSync.getPairingInfo();
+        renderMobilePairingInfo(info);
+    } catch (err) {
+        setMobileSyncMessage('无法连接', err.message || String(err));
+    }
+}
+
+function setMobileSyncMessage(state, message) {
+    $('#mobile-sync-state').textContent = state;
+    $('#mobile-sync-message').textContent = message;
+}
+
+function clearMobilePairingInfo() {
+    $('#mobile-device-code').textContent = '同步引擎就绪后显示';
+    $('#mobile-copy-device-code').disabled = true;
+    $('#mobile-sync-devices').innerHTML = '<li>同步引擎尚未就绪</li>';
+    $('#mobile-folder-state').textContent = '笔记文件夹：等待状态';
+}
+
+function renderMobilePairingInfo(info) {
+    $('#mobile-device-code').textContent = info.localDeviceId || '设备码不可用';
+    $('#mobile-copy-device-code').disabled = !info.localDeviceId;
+    const list = $('#mobile-sync-devices');
+    list.innerHTML = '';
+    const devices = Array.isArray(info.devices) ? info.devices : [];
+    if (devices.length === 0) {
+        list.innerHTML = '<li>暂无设备</li>';
+    } else {
+        devices.forEach(device => {
+            const item = document.createElement('li');
+            const name = document.createElement('strong');
+            const state = document.createElement('span');
+            name.textContent = device.name || '另一台设备';
+            state.textContent = device.connected ? '已连接' : '等待连接';
+            item.append(name, state);
+            list.appendChild(item);
+        });
+    }
+    const folder = info.folderStatus || {};
+    const state = folder.state === 'idle' ? '已同步' : (folder.state || '等待状态');
+    $('#mobile-folder-state').textContent = '笔记文件夹：' + state +
+        (Number.isFinite(folder.needFiles) && folder.needFiles > 0 ? '，待接收 ' + folder.needFiles + ' 个文件' : '');
+}
+
+async function onMobileSyncStart() {
+    setMobileSyncMessage('正在启动', '正在启动本机 P2P 同步引擎。');
+    try {
+        await window.androidSync.startEngine();
+        setTimeout(refreshMobileSyncCenter, 800);
+    } catch (err) {
+        setMobileSyncMessage('启动失败', err.message || String(err));
+    }
+}
+
+async function onMobileSyncStop() {
+    try {
+        await window.androidSync.stopEngine();
+        setTimeout(refreshMobileSyncCenter, 500);
+    } catch (err) {
+        setMobileSyncMessage('停止失败', err.message || String(err));
+    }
+}
+
+async function onMobileScanFolder() {
+    try {
+        await window.androidSync.scanFolder();
+        setMobileSyncMessage('已请求扫描', '正在检查本机笔记文件变化。');
+        setTimeout(refreshMobileSyncCenter, 600);
+    } catch (err) {
+        setMobileSyncMessage('扫描失败', err.message || String(err));
+    }
+}
+
+async function onMobileCopyDeviceCode() {
+    const code = $('#mobile-device-code').textContent.trim();
+    if (!code || code === '设备码不可用') return;
+    try {
+        await navigator.clipboard.writeText(code);
+        setMobileSyncMessage('已复制', '本机设备码已复制。');
+    } catch (err) {
+        setMobileSyncMessage('复制失败', '请长按设备码进行复制。');
+    }
+}
+
+async function onMobileScanDeviceQr() {
+    try {
+        const result = await window.androidSync.scanDeviceQr();
+        if (!result || result.cancelled) return;
+        $('#mobile-remote-device-id').value = result.deviceId || '';
+        await onMobilePreviewPairing();
+    } catch (err) {
+        setMobileSyncMessage('扫码失败', err.message || String(err));
+    }
+}
+
+async function onMobilePreviewPairing() {
+    const deviceId = $('#mobile-remote-device-id').value.trim();
+    const deviceName = $('#mobile-remote-device-name').value.trim();
+    AppState._pairingPreview = null;
+    $('#mobile-pairing-preview').hidden = true;
+    try {
+        const preview = await window.androidSync.previewDevicePairing(deviceId, deviceName);
+        AppState._pairingPreview = preview;
+        $('#mobile-pairing-device').textContent = preview.deviceName + ' · ' + preview.remoteDeviceId;
+        $('#mobile-pairing-summary').textContent = preview.message;
+        $('#mobile-pairing-preview').hidden = false;
+    } catch (err) {
+        setMobileSyncMessage('设备码无效', err.message || String(err));
+    }
+}
+
+async function onMobileConfirmPairing() {
+    const preview = AppState._pairingPreview;
+    if (!preview || !preview.confirmationToken) return;
+    $('#mobile-confirm-pairing').disabled = true;
+    try {
+        const result = await window.androidSync.confirmDevicePairing(preview.confirmationToken);
+        AppState._pairingPreview = null;
+        $('#mobile-pairing-preview').hidden = true;
+        $('#mobile-remote-device-id').value = '';
+        setMobileSyncMessage('本机已确认', result.message || '设备已添加。');
+        await refreshMobileSyncCenter();
+    } catch (err) {
+        setMobileSyncMessage('配对失败', err.message || String(err));
+    } finally {
+        $('#mobile-confirm-pairing').disabled = false;
+    }
+}
+
 async function onMobileVisibilityChange() {
-    if (document.visibilityState !== 'visible' || AppState.storageMode !== 'android') return;
+    if (document.visibilityState !== 'visible') return;
+    if (AppState._view === 'sync') {
+        await refreshMobileSyncCenter();
+        return;
+    }
+    if (AppState.storageMode !== 'android') return;
 
     try {
         if (AppState.currentNoteId && !AppState.isDirty) {

@@ -25,6 +25,18 @@ class SyncthingEnginePolicyTest {
     }
 
     @Test
+    fun rejectsIncompleteDeviceCodesAndUnsafeNames() {
+        val valid = "MFZWI3D-BONSGYC-YLTMRWG-C43ENR5-QXGZDMM-FZWI3DP-BONSGYY-LTMRWAD"
+        assertTrue(SyncthingEnginePolicy.isPlausibleDeviceId(valid))
+        assertTrue(SyncthingEnginePolicy.isPlausibleDeviceId("  $valid\n"))
+        assertFalse(SyncthingEnginePolicy.isPlausibleDeviceId("short-code"))
+        assertFalse(SyncthingEnginePolicy.isPlausibleDeviceId(valid.dropLast(1) + "/"))
+        assertTrue(SyncthingEnginePolicy.isValidDeviceName("我的电脑"))
+        assertFalse(SyncthingEnginePolicy.isValidDeviceName("a".repeat(65)))
+        assertFalse(SyncthingEnginePolicy.isValidDeviceName("bad\nname"))
+    }
+
+    @Test
     fun packagesBothPinnedNativeExecutables() {
         val artifacts = mapOf(
             "arm64-v8a" to 32191744L,

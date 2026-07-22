@@ -84,6 +84,19 @@ struct AndroidSyncStatus {
     version: String,
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DevicePairingPreviewRequest {
+    device_id: String,
+    device_name: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfirmDevicePairingRequest {
+    confirmation_token: String,
+}
+
 fn android_native_plugin() -> TauriPlugin<Wry> {
     Builder::<Wry>::new("android-native")
         .setup(|app, api| {
@@ -180,6 +193,39 @@ fn syncthing_stop(native: State<'_, AndroidNative>) -> Result<AndroidSyncStatus,
     native_call(&native, "stopEngine", ())
 }
 
+#[tauri::command]
+fn syncthing_pairing_info(
+    native: State<'_, AndroidNative>,
+) -> Result<serde_json::Value, String> {
+    native_call(&native, "getPairingInfo", ())
+}
+
+#[tauri::command]
+fn syncthing_preview_device_pairing(
+    native: State<'_, AndroidNative>,
+    request: DevicePairingPreviewRequest,
+) -> Result<serde_json::Value, String> {
+    native_call(&native, "previewDevicePairing", request)
+}
+
+#[tauri::command]
+fn syncthing_confirm_device_pairing(
+    native: State<'_, AndroidNative>,
+    request: ConfirmDevicePairingRequest,
+) -> Result<serde_json::Value, String> {
+    native_call(&native, "confirmDevicePairing", request)
+}
+
+#[tauri::command]
+fn syncthing_scan_folder(native: State<'_, AndroidNative>) -> Result<serde_json::Value, String> {
+    native_call(&native, "scanNotesFolder", ())
+}
+
+#[tauri::command]
+fn android_scan_device_qr(native: State<'_, AndroidNative>) -> Result<serde_json::Value, String> {
+    native_call(&native, "scanDeviceQr", ())
+}
+
 fn storage_target_call(
     native: &AndroidNative,
     command: &str,
@@ -217,7 +263,12 @@ pub fn run() {
             mobile_storage_delete,
             syncthing_status,
             syncthing_start,
-            syncthing_stop
+            syncthing_stop,
+            syncthing_pairing_info,
+            syncthing_preview_device_pairing,
+            syncthing_confirm_device_pairing,
+            syncthing_scan_folder,
+            android_scan_device_qr
         ])
         .run(tauri::generate_context!())
         .expect("error while running s-light notes on Android");

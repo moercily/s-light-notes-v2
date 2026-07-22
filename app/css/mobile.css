@@ -385,3 +385,125 @@ button {
     font-size: 13px;
     line-height: 1.6;
 }
+
+.mobile-sync-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 calc(16px + env(safe-area-inset-right))
+             calc(24px + env(safe-area-inset-bottom))
+             calc(16px + env(safe-area-inset-left));
+}
+
+.sync-section {
+    padding: 18px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sync-section h2 {
+    margin-bottom: 10px;
+    font-size: 15px;
+    font-weight: 650;
+}
+
+.sync-section p,
+.sync-section label,
+.sync-device-list span {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.sync-section label {
+    display: block;
+    margin: 12px 0 6px;
+}
+
+.sync-section input,
+.sync-section textarea {
+    width: 100%;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 10px 12px;
+    font-size: 16px;
+    resize: vertical;
+}
+
+#mobile-device-code {
+    display: block;
+    margin: 8px 0 12px;
+    color: var(--text-primary);
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+.sync-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.sync-actions button,
+.sync-wide-button {
+    min-width: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 8px 10px;
+}
+
+.sync-wide-button {
+    width: 100%;
+}
+
+.sync-actions button:disabled,
+.sync-wide-button:disabled {
+    opacity: 0.45;
+}
+
+.sync-preview {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border-color);
+}
+
+.sync-preview strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.sync-preview .sync-wide-button {
+    margin-top: 10px;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #ffffff;
+}
+
+.sync-device-list {
+    list-style: none;
+    margin-bottom: 12px;
+}
+
+.sync-device-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sync-device-list strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+}

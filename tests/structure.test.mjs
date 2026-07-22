@@ -16,6 +16,7 @@ const v2MustExist = [
   'app/js/storage.js',
   'app/js/desktop-service.js',
   'app/js/mobile-storage-service.js',
+  'app/js/android-sync-service.js',
   'app/js/sync-center.js',
   'app/js/sync-service.js',
   'src-tauri/tauri.conf.json',
@@ -25,6 +26,10 @@ const v2MustExist = [
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/AndroidBridgePlugin.kt',
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/NoteStore.kt',
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/NotesDocumentsProvider.kt',
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/SyncthingEngine.kt',
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/SyncthingForegroundService.kt',
+  'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/DeviceQrScanner.kt',
+  'src-tauri/gen/android/app/src/main/assets/notices/ZXING_NOTICE.txt',
   'src-tauri/src/android.rs',
   'src-tauri/src/desktop.rs',
   'src-tauri/capabilities/android.json',
@@ -132,6 +137,18 @@ const mobileCss = readFileSync('app/css/mobile.css', 'utf8');
 const mobileJs = readFileSync('app/js/mobile.js', 'utf8');
 assert.doesNotMatch(desktopHtml, /mobile\.css|mobile\.js|mobile-storage-service\.js/);
 assert.match(mobileHtml, /mobile-storage-service\.js/);
+assert.match(mobileHtml, /android-sync-service\.js/);
+for (const id of [
+  'mobile-sync-view',
+  'mobile-device-code',
+  'mobile-remote-device-id',
+  'mobile-scan-device-qr',
+  'mobile-preview-pairing',
+  'mobile-confirm-pairing',
+  'mobile-sync-devices',
+]) {
+  assert.match(mobileHtml, new RegExp(`id=["']${id}["']`), `${id} should exist in mobile sync center`);
+}
 assert.match(mobileCss, /@media \(max-width: 340px\)/);
 assert.match(mobileCss, /orientation: landscape/);
 assert.match(mobileJs, /history\.pushState/);
@@ -142,10 +159,13 @@ const androidEngine = readFileSync(
 );
 assert.match(androidManifest, /FOREGROUND_SERVICE_DATA_SYNC/);
 assert.match(androidManifest, /SyncthingForegroundService/);
+assert.match(androidManifest, /android\.permission\.CAMERA/);
 assert.doesNotMatch(androidManifest, /BOOT_COMPLETED|MANAGE_EXTERNAL_STORAGE/);
 assert.match(androidEngine, /127\.0\.0\.1:8386/);
 assert.match(androidEngine, /STGUIAPIKEY/);
 assert.doesNotMatch(androidEngine, /0\.0\.0\.0:8386/);
+assert.match(androidEngine, /confirmationToken|PendingPairing/);
+assert.doesNotMatch(mobileJs, /apiKey|127\.0\.0\.1:8386|STGUIAPIKEY/);
 for (const id of [
   'sync-advanced-connection',
   'sync-binding-panel',
@@ -171,7 +191,7 @@ for (const id of [
 }
 
 const serviceWorker = readFileSync('app/sw.js', 'utf8');
-for (const asset of ['desktop-service.js', 'mobile-storage-service.js', 'sync-service.js', 'sync-center.js']) {
+for (const asset of ['desktop-service.js', 'mobile-storage-service.js', 'android-sync-service.js', 'sync-service.js', 'sync-center.js']) {
   assert.match(serviceWorker, new RegExp(asset.replace('.', '\\.')), `${asset} should be precached`);
 }
 assert.match(serviceWorker, /CACHE_PREFIX/, 'v2 should only clean up its own cache namespace');

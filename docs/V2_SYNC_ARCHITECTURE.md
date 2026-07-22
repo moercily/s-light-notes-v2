@@ -62,7 +62,9 @@ mobile.html
 
 - The Android engine is built from pinned Syncthing v2.1.2 source for arm64 and x86-64 with Go 1.25.11 and NDK 28 or newer, and its ELF load segments are verified at 16 KB alignment.
 - `libsyncthingnative.so` is an Android PIE executable stored under `jniLibs` so the package manager extracts it to the private native-library directory. It is launched as a managed child process and is not loaded as a JNI shared library.
-- Kotlin owns process/service lifecycle, safe REST requests, the private API Key, fixed runtime paths, and initial folder binding. Rust exposes only constrained Tauri commands and never returns the credential to JavaScript. Pairing validation, one-time confirmation tokens, readback, and rollback remain the next Android implementation step.
+- Kotlin owns process/service lifecycle, safe REST requests, the private API Key, fixed runtime paths, initial folder binding, pairing validation, one-time confirmation tokens, readback, and rollback. Rust exposes only constrained Tauri commands and never returns the credential to JavaScript.
+- The Android sync center receives only device IDs, display names, connection booleans, bounded folder counters, and user-facing messages. It cannot provide device addresses, arbitrary REST paths, folder paths, ports, or raw configuration.
+- ZXing launches only from the explicit scan action. A scan fills the device-code field and still passes through the same preview and confirmation flow as manual entry.
 - The REST endpoint remains loopback-only and fixed by native code. JavaScript cannot provide a port, API base, path, or credential.
 - Android notes paths are resolved natively and cannot be replaced by a frontend-supplied path or document URI.
 - Android package metadata records source revision, Go/NDK versions, ABI hashes, and MPL-2.0 notices.

@@ -191,6 +191,15 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Kotlin storage and engine-policy tests passed for both ABIs; frontend tests, all 31 Rust tests, and macOS desktop packaging also passed at this checkpoint.
 - Runtime launch, notification behavior, API 35+ timeout behavior, actual device identity generation, and P2P transfer are not considered passed until an emulator or physical device run is recorded.
 
+### Android Pairing Build Checkpoint - 2026-07-22
+
+- arm64 and x86-64 debug APK builds pass with the Android sync center, constrained pairing commands, and ZXing scanner activity.
+- Frontend bridge tests verify status, start, stop, pairing preview, confirmation, folder scan, and QR scan calls without API Keys or management ports.
+- Kotlin policy tests reject incomplete device codes, control characters, oversized names, unsafe REST paths, and invalid private credentials.
+- Pairing confirmation is held in memory for five minutes, consumed once, rechecks live device state, shares only `s-light-notes`, verifies both writes, and attempts rollback after failure.
+- The sync center has no horizontal overflow at 320x640, 390x844, or 844x390; long device codes wrap and all tested controls retain at least 44px touch height.
+- Camera denial, scan cancellation, successful QR capture, two-device mutual confirmation, and real file transfer remain emulator/phone acceptance work.
+
 - Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
 - Android emulator gate: install and launch on an API 36 x86-64 image; verify 320px-430px layout, safe areas, keyboard, rotation, Android back handling, and no horizontal overflow.
 - Android storage gate: create, save, reopen, trash, restore, permanently delete, and externally read/edit Markdown through the system `DocumentsProvider`.

@@ -197,6 +197,8 @@ QR scanning is blocked until the mobile shell and permission model are selected.
 
 Android implementation checkpoint (2026-07-21): the dedicated Tauri project, platform split, native Markdown store, `DocumentsProvider`, mobile layout, and both pinned Syncthing engine artifacts are implemented. The arm64 and x86-64 artifacts are Android PIE executables packaged under `jniLibs` with the `.so` suffix used by the established Android wrapper pattern; they are managed as child processes and are not JNI libraries. Both ABI builds compile and package successfully. Foreground-service source and API 35+ timeout cleanup are present, but runtime service, permission, background, and P2P acceptance remain open until an emulator or connected device is available.
 
+Android pairing checkpoint (2026-07-22): the dedicated mobile sync center, safe status model, manual device-code flow, offline ZXing QR scanner entry, five-minute single-use confirmation, folder sharing, readback, and rollback are implemented. JavaScript cannot provide API credentials, management addresses, note paths, device addresses, or raw Syncthing configuration. arm64 and x86-64 APK builds, both Kotlin test variants, and 320px/390px/landscape browser layout checks pass. Camera permission, actual QR capture, native engine launch, two-device confirmation, and transfer remain real-device acceptance items and are not marked complete from source/build validation alone.
+
 Android branch and delivery policy:
 
 - Implementation branch: `codex/android-v2`, created from v2 `main` at `8b461ff`.
