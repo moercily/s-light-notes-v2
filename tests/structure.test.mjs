@@ -177,6 +177,7 @@ for (const id of [
 assert.match(mobileCss, /@media \(max-width: 340px\)/);
 assert.match(mobileCss, /orientation: landscape/);
 assert.match(mobileCss, /--landscape-safe-top: max\(env\(safe-area-inset-top\), 24px\)/);
+assert.match(mobileCss, /#mobile-format-bar\[hidden\]\s*\{\s*display:\s*none/);
 assert.match(mobileJs, /history\.pushState/);
 assert.match(mobileJs, /note\.isConflict/);
 assert.match(mobileJs, /contentEditable = note\.isConflict/);

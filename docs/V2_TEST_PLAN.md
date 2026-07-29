@@ -264,9 +264,9 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Both APKs pass Android `apksigner` verification with v2 and v3 signature schemes. The AAB passes JAR signature verification. All three artifacts use certificate SHA-256 `bde886bebb20114c53661299f4d40bb679acbe433bb476eb4ab5bf7977efaddd`.
 - Package metadata is `com.slightnotes.v2`, version code `2000000`, version name `2.0.0-alpha.0`, minimum API 26, and target API 36.
 - Collected release artifacts:
-  - arm64-v8a APK: 19,145,123 bytes; SHA-256 `5d35b9187387e46ed709a33b518b7044c98b23aebb0353ddf9d58f6f4df39a62`.
-  - x86_64 APK: 19,924,061 bytes; SHA-256 `9decd9076adc0dbe28dda5751b4f0c13bcbeccabf5e34b7d9410e911e9f31f81`.
-  - universal AAB: 37,363,431 bytes; SHA-256 `1dc4348cc1f82a039ea1b1f69108195b791fbd3bcfc7183ab605e60a24630977`.
+  - arm64-v8a APK: 19,145,129 bytes; SHA-256 `de93522ffbe2962aa5d0166cea0c54140817d4f28211a6dc720d46b5776383a4`.
+  - x86_64 APK: 19,924,144 bytes; SHA-256 `0a3c8feb827eaba71f44012f5c7f2b547e1905eea8c6e91e33f2ef277d3741ad`.
+  - universal AAB: 37,363,533 bytes; SHA-256 `85eda2369427ec8b3afbef40ac30b55964987117360d96350613f86671661e88`.
 - `npm test`, all 31 Rust tests after rebuilding the moved repository cache, arm64/x86_64 debug plus release Kotlin unit-test variants, and macOS desktop application packaging pass at this checkpoint.
 - The signing identity is local and ignored but has not yet been backed up outside the development machine. Store upload validation remains pending.
 - The installed acceptance build uses the Android debug certificate, while release artifacts use the local release certificate. Android rejects an in-place signature change, so the signed APK cannot replace the accepted debug package without uninstalling it and erasing application-private data. The phone's notes and identity were preserved; signed runtime smoke testing remains assigned to a fresh device or disposable test profile.

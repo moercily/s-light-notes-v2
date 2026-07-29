@@ -308,6 +308,10 @@ button {
     flex-shrink: 0;
 }
 
+#mobile-format-bar[hidden] {
+    display: none;
+}
+
 #mobile-format-bar button {
     flex: 1;
     min-width: 0;
