@@ -145,6 +145,6 @@ mobile.html
 ## v2 Alpha Limitations
 
 - Desktop sidecars are pinned for macOS Apple Silicon/Intel, Windows x64, and Linux x64. Native package validation remains pending for macOS Intel and Linux x64.
-- QR display/capture, device-code pairing, sync-center event refresh, and the Android read-only conflict workflow are available. API 36 emulator and physical arm64 acceptance have verified direct pairing, bidirectional P2P transfer, offline reconnection, real conflict generation, permission recovery, and force-stop identity persistence against an isolated desktop peer. Naturally timed WorkManager exchange and unplugged battery behavior remain open.
+- QR display/capture, device-code pairing, sync-center event refresh, and the Android read-only conflict workflow are available. API 36 emulator and physical arm64 acceptance have verified direct pairing, bidirectional P2P transfer, offline reconnection, real conflict generation, permission recovery, and force-stop identity persistence against an isolated desktop peer. Signed split APKs and a universal AAB are available through a fail-closed local signing workflow. Naturally timed WorkManager exchange, unplugged battery behavior, remaining conflict-action integrity checks, and store submission remain open.
 - External development override mode still accepts a user-provided API Key; standard bundled-sidecar UI hides those advanced fields.
 - Android background sync is bounded by foreground-service and job quotas; it is not an all-day daemon. iOS background behavior remains a separate later track.

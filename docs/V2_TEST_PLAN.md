@@ -239,7 +239,7 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Verified camera denial keeps the pairing screen usable, and portrait plus low-height landscape screenshots retain status-bar separation and usable controls.
 - Final regression passed `npm test`, all 31 Rust tests, arm64/x86-64 Kotlin unit tests, both split debug APK builds through the Tauri Android entry point, and macOS application packaging. Reinstalling the final arm64 APK over the tested app preserved notes, conflicts, and the existing Syncthing identity.
 - Final debug artifacts: `app-arm64-debug.apk` SHA-256 `4cc901f48b9f1b66267ce09002b21b440f0099a3f836bd8ccbe82e45c6fd563c`; `app-x86_64-debug.apk` SHA-256 `6e3297ac39ed9ae21065205d0bf626e973311b74ee9312e88587250c5ffd1854`.
-- Not yet passed: x86-64 emulator runtime, naturally scheduled WorkManager exchange, unplugged physical-phone battery measurement, remaining conflict-action integrity checks, release signing, and store packaging.
+- Not yet passed: x86-64 emulator runtime, naturally scheduled WorkManager exchange, unplugged physical-phone battery measurement, remaining conflict-action integrity checks, and store submission.
 
 ### Android 16 Physical Device Acceptance - 2026-07-22
 
@@ -254,6 +254,19 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Portrait keyboard input kept the editor usable. Portrait and landscape layouts retained system-bar separation, stable headers, and usable controls; the landscape keyboard naturally leaves only a shallow editing area on this device.
 - Security checks found the management API only on `127.0.0.1:8386`, while P2P used the expected LAN listener. Engine identity, configuration, database, logs, and API key remained inside application-private storage.
 - Remaining physical checks: observe a naturally scheduled one-hour WorkManager exchange, test conflict copy/trash/hash preservation actions, and measure battery behavior while unplugged. USB power during this session made battery-drain measurement invalid.
+
+### Android Signed Release Checkpoint - 2026-07-29
+
+- The release configuration refuses to run without ignored local signing properties. `npm run android:signing:setup` creates a 4096-bit RSA PKCS12 identity and local properties with owner-only permissions and refuses to replace an existing identity.
+- `npm run tauri:android:build:release` targets only aarch64 and x86_64, producing two installable APKs and one universal AAB. The AAB contains both `arm64-v8a` and `x86_64` Rust and Syncthing libraries.
+- Both APKs pass Android `apksigner` verification with v2 and v3 signature schemes. The AAB passes JAR signature verification. All three artifacts use certificate SHA-256 `bde886bebb20114c53661299f4d40bb679acbe433bb476eb4ab5bf7977efaddd`.
+- Package metadata is `com.slightnotes.v2`, version code `2000000`, version name `2.0.0-alpha.0`, minimum API 26, and target API 36.
+- Collected release artifacts:
+  - arm64-v8a APK: 19,145,066 bytes; SHA-256 `667b0e20b67b29bbeb7412d99ed8420f4ec2b3d2a3240f6bcd4b438eecfa8a2f`.
+  - x86_64 APK: 19,924,052 bytes; SHA-256 `6f5c2d6eefbb67f9057a2d8778b82bf438fb133496fcf7a08077d3bf014b9d3d`.
+  - universal AAB: 37,363,382 bytes; SHA-256 `f3f519306f4c51bbe12494b521880e2eb292031cbcfe384220ec42612ec4a736`.
+- `npm test`, all 31 Rust tests after rebuilding the moved repository cache, arm64/x86_64 debug plus release Kotlin unit-test variants, and macOS desktop application packaging pass at this checkpoint.
+- The signing identity is local and ignored but has not yet been backed up outside the development machine. Store upload validation remains pending.
 
 - Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
 - Android emulator gate: install and launch on an API 36 x86-64 image; verify 320px-430px layout, safe areas, keyboard, rotation, Android back handling, and no horizontal overflow.

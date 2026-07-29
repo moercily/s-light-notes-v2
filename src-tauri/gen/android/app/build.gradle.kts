@@ -13,6 +13,22 @@ val tauriProperties = Properties().apply {
     }
 }
 
+val releaseSigningFile = rootProject.file("keystore.properties")
+val releaseSigning = Properties().apply {
+    if (releaseSigningFile.isFile) {
+        releaseSigningFile.inputStream().use { load(it) }
+    }
+}
+val releaseTaskRequested = gradle.startParameter.taskNames.any {
+    it.contains("release", ignoreCase = true)
+}
+
+if (releaseTaskRequested && !releaseSigningFile.isFile) {
+    throw GradleException(
+        "Android release signing is not configured. Run `npm run android:signing:setup` first."
+    )
+}
+
 android {
     compileSdk = 36
     namespace = "com.slightnotes.v2"
@@ -23,6 +39,20 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    signingConfigs {
+        if (releaseSigningFile.isFile) {
+            create("release") {
+                storeFile = rootProject.file(releaseSigning.getProperty("storeFile"))
+                storePassword = releaseSigning.getProperty("storePassword")
+                keyAlias = releaseSigning.getProperty("keyAlias")
+                keyPassword = releaseSigning.getProperty("keyPassword")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -37,6 +67,7 @@ android {
             }
         }
         getByName("release") {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }

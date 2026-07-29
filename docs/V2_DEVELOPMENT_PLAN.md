@@ -34,12 +34,13 @@ Known release gaps:
 
 - macOS Apple Silicon and Windows x64 have packaged-app proof; Linux and macOS Intel native package validation remain pending.
 - Windows x64 has been packaged and tested under x64 emulation, but its interactive Markdown loop and native x64 hardware coverage remain pending.
-- QR scanning is not implemented.
-- Real two-device synchronization and conflict handling have not been completed.
-- Android and iOS installable clients have not been created.
+- Android QR capture, Android-to-desktop synchronization, offline recovery, and conflict handling have passed API 36 emulator and arm64 physical-device acceptance.
+- Two-desktop synchronization and conflict acceptance remain pending.
+- Installable Android debug APKs exist for arm64-v8a and x86_64; iOS has not been created.
+- Android naturally scheduled WorkManager exchange, unplugged power measurement, remaining conflict-action integrity checks, and store submission remain pending. Signed APK/AAB packaging is complete.
 - Automatic installer/updater integration has not been created.
 
-Current implementation focus (2026-07-20): Android is the highest-priority delivery track. Work is isolated on `codex/android-v2`; the first user-testable APK must include in-app P2P synchronization rather than only an offline editor.
+Current implementation focus (2026-07-29): close the remaining Android physical-device and release-engineering gates, produce signed APK/AAB artifacts, and merge `codex/android-v2` into `main`.
 
 ## 3. Product Release Target
 
@@ -208,7 +209,9 @@ Android 16 local-network checkpoint (current branch): the package declares `NEAR
 
 Android conflict-workflow checkpoint (current branch): Syncthing conflict filenames are identified through the shared Markdown naming rules and shown with a dedicated badge in the mobile note list plus a source/time list in the sync center. Opening a conflict copy forces the editor to `contenteditable=false`; users may preserve the exact content as a new ordinary note, copy it, or move only the conflict file to trash. A constrained Android bridge test confirms conflict status results omit note content, and 320x640 browser checks confirm the read-only panel and sync list have no horizontal overflow with 44px controls. An API 36 Android runtime and an isolated desktop peer produced real conflict files after independent offline edits; the app listed and opened both copies read-only, and preserving one created a normal Markdown note without removing the original conflict.
 
-Android API 36 runtime checkpoint (2026-07-22): emulator acceptance and physical arm64 acceptance both pass for install/launch, application-private Markdown, `DocumentsProvider`, guarded native-engine startup, stable identity, pairing, bidirectional transfer, offline reconnection, and real conflict generation. The physical phone also passes camera QR capture, duplicate-device protection, permission revocation/recovery, portrait keyboard input, landscape layout, notified background synchronization, default background stop, and force-stop non-resurrection. The management API remains loopback-only and all engine credentials remain in app-private storage. A naturally timed WorkManager exchange, unplugged battery measurement, release signing, and store packaging remain open; these distribution and long-duration checks do not block the functional debug-APK handoff.
+Android API 36 runtime checkpoint (2026-07-22): emulator acceptance and physical arm64 acceptance both pass for install/launch, application-private Markdown, `DocumentsProvider`, guarded native-engine startup, stable identity, pairing, bidirectional transfer, offline reconnection, and real conflict generation. The physical phone also passes camera QR capture, duplicate-device protection, permission revocation/recovery, portrait keyboard input, landscape layout, notified background synchronization, default background stop, and force-stop non-resurrection. The management API remains loopback-only and all engine credentials remain in app-private storage. A naturally timed WorkManager exchange, unplugged battery measurement, remaining conflict-action integrity checks, and store submission remain open.
+
+Android signed-release checkpoint (2026-07-29): the Gradle release build now fails closed when local signing material is absent. A one-time setup command creates a 4096-bit RSA PKCS12 identity and ignored local properties with owner-only permissions; neither is committed. The release workflow produces signed arm64-v8a and x86_64 APKs plus one universal AAB containing both supported ABIs. APK Signature Scheme v2/v3, AAB JAR signing, certificate equality, package/version metadata, native contents, and SHA-256 manifests pass. The local signing identity must be backed up before external distribution.
 
 Android branch and delivery policy:
 
@@ -234,6 +237,8 @@ Mobile exit condition: at least one platform has an installable client with a do
 ## 10. Phase V2.6: Release and Update Engineering
 
 - `[x]` Select NSIS as the first Windows installer format and provide `npm run tauri:build:windows`.
+- `[x]` Add fail-closed Android release signing, split APK packaging, a universal AAB, and checksum collection without committing signing material.
+- `[ ]` Back up the Android release identity outside the development machine and complete store listing, privacy, and upload validation.
 - `[ ]` Select Linux package formats.
 - `[ ]` Add macOS Intel, Windows, and Linux artifact checksums to the release process.
 - `[ ]` Add code signing/notarization requirements for supported desktop platforms.
@@ -256,12 +261,12 @@ Mobile exit condition: at least one platform has an installable client with a do
 
 The next implementation sessions should use this order:
 
-1. Commit the Android requirements, architecture, development, and test-plan updates on `codex/android-v2`.
-2. Install the Android SDK/NDK/Rust prerequisites and initialize the Tauri Android target.
-3. Separate desktop and Android configuration and prove desktop regression gates still pass.
-4. Add Android native Markdown storage, `DocumentsProvider`, and the dedicated mobile interface.
-5. Build the pinned Android Syncthing engine and add its foreground-service lifecycle.
-6. Validate Android pairing, QR scanning, background policy, and real Android-to-desktop transfer on an API 36 emulator and arm64 phone.
+1. Observe one naturally scheduled WorkManager exchange on an unplugged arm64 phone and record battery behavior.
+2. Complete physical-device conflict copy, clipboard, trash, and before/after hash checks.
+3. Install and smoke-test the signed arm64 release over the accepted debug build without losing notes or identity.
+4. Run frontend, Rust, Kotlin, Android package, and desktop regression gates.
+5. Merge the accepted Android branch into `main`.
+6. Back up the signing identity, validate the store upload, then resume native Linux, macOS Intel, Windows x64 hardware, and two-desktop acceptance.
 
 ## 13. Change and Commit Rules
 

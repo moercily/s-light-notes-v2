@@ -44,6 +44,8 @@ const v2MustExist = [
   'src-tauri/binaries/syncthing-sidecar-x86_64-pc-windows-msvc.exe',
   'src-tauri/binaries/syncthing-sidecar-x86_64-unknown-linux-gnu',
   'src-tauri/binaries/notices/SYNCTHING_LICENSE.txt',
+  'scripts/setup-android-signing.mjs',
+  'scripts/package-android-release.mjs',
   'docs/V2_DEVELOPMENT_PLAN.md',
   'tests/sync-service.test.mjs',
   'tests/desktop-storage.test.mjs',
@@ -89,6 +91,16 @@ assert.equal(
   'Linux releases should build deb and AppImage packages'
 );
 assert.equal(
+  packageJson.scripts['tauri:android:build:release:apk'],
+  'tauri android build --target aarch64 x86_64 --split-per-abi --apk --ci',
+  'Android release APKs should target only the supported ABIs'
+);
+assert.equal(
+  packageJson.scripts['tauri:android:build:release:aab'],
+  'tauri android build --target aarch64 x86_64 --aab --ci',
+  'Android store packaging should include both supported ABIs in one AAB'
+);
+assert.equal(
   tauriConfig.app.withGlobalTauri,
   true,
   'plain HTML desktop builds require window.__TAURI__ to be injected'
@@ -105,6 +117,9 @@ assert.equal(androidConfig.bundle.android.minSdkVersion, 26);
 assert.match(androidBuild, /compileSdk = 36/);
 assert.match(androidBuild, /minSdk = 26/);
 assert.match(androidBuild, /targetSdk = 36/);
+assert.match(androidBuild, /releaseSigningFile/);
+assert.match(androidBuild, /Android release signing is not configured/);
+assert.match(androidBuild, /signingConfig = signingConfigs\.findByName\("release"\)/);
 assert.doesNotMatch(androidManifest, /LEANBACK_LAUNCHER|android\.software\.leanback/);
 assert.match(androidManifest, /android\.content\.action\.DOCUMENTS_PROVIDER/);
 assert.match(androidManifest, /android:permission="android\.permission\.MANAGE_DOCUMENTS"/);

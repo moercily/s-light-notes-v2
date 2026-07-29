@@ -13,7 +13,12 @@
     "tauri:build:linux": "tauri build --bundles deb,appimage",
     "tauri:android:init": "tauri android init",
     "tauri:android:dev": "tauri android dev",
-    "tauri:android:build": "tauri android build"
+    "tauri:android:build": "tauri android build",
+    "android:signing:setup": "node scripts/setup-android-signing.mjs",
+    "tauri:android:build:release": "npm run tauri:android:build:release:apk && npm run tauri:android:build:release:aab",
+    "tauri:android:build:release:apk": "tauri android build --target aarch64 x86_64 --split-per-abi --apk --ci",
+    "tauri:android:build:release:aab": "tauri android build --target aarch64 x86_64 --aab --ci",
+    "android:release:collect": "node scripts/package-android-release.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

@@ -6,6 +6,7 @@
 # Local dependencies and build output
 node_modules/
 src-tauri/target/
+release/
 src-tauri/gen/*
 !src-tauri/gen/android/
 !src-tauri/gen/android/**
