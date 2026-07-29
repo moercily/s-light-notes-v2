@@ -52,8 +52,8 @@ release. Losing them prevents future signed upgrades.
   system document picker, scans device QR codes, and runs its own pinned
   Syncthing engine for arm64-v8a and x86_64.
 - Android-to-desktop pairing, bidirectional transfer, offline recovery,
-  conflicts, permissions, lifecycle, and arm64 physical-device behavior have
-  passed functional acceptance.
+  conflicts, permissions, lifecycle, naturally scheduled background exchange,
+  and arm64 physical-device behavior have passed functional acceptance.
 - Android background synchronization is intentionally bounded. Release
-  store submission, long-duration power validation, and some native desktop
-  package checks remain release gates.
+  store submission, controlled long-duration power characterization, and some
+  native desktop package checks remain release gates.

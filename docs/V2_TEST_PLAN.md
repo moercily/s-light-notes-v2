@@ -208,7 +208,7 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - WorkManager scheduler metadata may survive a reboot, but a boot-count gate prevents the worker from starting Syncthing until the app has been opened during the current boot.
 - Process lifecycle handling keeps app-owned QR scanning from being treated as a true background transition. Leaving the application stops continuous synchronization unless the user enabled the notified session.
 - API 35+ timeout, notification stop, app-background stop, policy stop, and opportunity-completion reasons are persisted for the sync-center status.
-- Frontend tests and arm64/x86-64 Kotlin compilation and unit tests pass. API 36 emulator checks pass for notification denial, QR permission denial, notification stop, API timeout, force-stop, reboot gating, and foreground/background transitions. Physical foreground/background, notification, force-stop, and identity-recovery behavior also pass. The one-hour worker is registered with battery-not-low and unmetered-network constraints; a naturally timed exchange and unplugged power measurement remain open.
+- Frontend tests and arm64/x86-64 Kotlin compilation and unit tests pass. API 36 emulator checks pass for notification denial, QR permission denial, notification stop, API timeout, force-stop, reboot gating, and foreground/background transitions. Physical foreground/background, notification, force-stop, identity recovery, and naturally timed bounded exchange behavior also pass. On 2026-07-29, JobScheduler recorded one successful worker; Syncthing logs show it connected to the paired desktop, transferred files, and stopped after the opportunity window.
 
 ### Android 16 Local Network Compatibility
 
@@ -223,10 +223,10 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 ### Android Conflict Workflow Checkpoint - Current Branch
 
 - The Android sync bridge filters Syncthing conflict IDs and returns only ID, source ID, and update time; note content is not included in the conflict-status result.
-- The mobile note list marks conflicts separately. Opening one hides the ordinary delete action, sets the editor to `contenteditable=false`, and exposes keep-copy, copy-content, and trash actions.
+- The mobile note list marks conflicts separately. Opening one hides the ordinary delete and formatting actions, sets the editor to `contenteditable=false`, and exposes keep-copy, copy-content, and trash actions.
 - Keeping a copy writes the same Markdown content through the normal native save path under a non-conflict unique name. Viewing and copying do not write the original conflict file.
 - A 320x640 browser fixture confirmed no horizontal overflow, 44px conflict actions, a 44px sync-center conflict row, and a read-only editor attribute. The fixture was removed after validation.
-- API 36 runtime acceptance passes for competing Android/desktop offline edits, Syncthing conflict-file creation on both peers, conflict-list refresh, read-only opening, and keep-as-new without deleting the original conflict. Clipboard, trash, and before/after hash checks remain for the physical-device pass.
+- API 36 runtime acceptance passes for competing Android/desktop offline edits, Syncthing conflict-file creation on both peers, conflict-list refresh, and read-only opening. On the physical arm64 phone, a controlled conflict passed clipboard copy, keep-as-new, and trash checks. The source, conflict, kept copy, and trashed conflict each retained SHA-256 `4eaf4c4ea9883ea8f0c7dfe451557c51e2a363fd1d3c4e2f7962904684d74bca`; only the chosen conflict path moved into `.trash`. Synthetic copies were removed after verification.
 
 ### Android API 36 Runtime Acceptance - Current Branch
 
@@ -239,7 +239,7 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Verified camera denial keeps the pairing screen usable, and portrait plus low-height landscape screenshots retain status-bar separation and usable controls.
 - Final regression passed `npm test`, all 31 Rust tests, arm64/x86-64 Kotlin unit tests, both split debug APK builds through the Tauri Android entry point, and macOS application packaging. Reinstalling the final arm64 APK over the tested app preserved notes, conflicts, and the existing Syncthing identity.
 - Final debug artifacts: `app-arm64-debug.apk` SHA-256 `4cc901f48b9f1b66267ce09002b21b440f0099a3f836bd8ccbe82e45c6fd563c`; `app-x86_64-debug.apk` SHA-256 `6e3297ac39ed9ae21065205d0bf626e973311b74ee9312e88587250c5ffd1854`.
-- Not yet passed: x86-64 emulator runtime, naturally scheduled WorkManager exchange, unplugged physical-phone battery measurement, remaining conflict-action integrity checks, and store submission.
+- Not yet passed: x86-64 emulator runtime, controlled long-duration physical-phone power characterization, fresh-install signed-release runtime, and store submission.
 
 ### Android 16 Physical Device Acceptance - 2026-07-22
 
@@ -253,7 +253,9 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Verified force-stop prevents process or engine resurrection. Reopening restored the same Syncthing certificate/key identity, fixed folder, paired peer, and scheduled WorkManager task.
 - Portrait keyboard input kept the editor usable. Portrait and landscape layouts retained system-bar separation, stable headers, and usable controls; the landscape keyboard naturally leaves only a shallow editing area on this device.
 - Security checks found the management API only on `127.0.0.1:8386`, while P2P used the expected LAN listener. Engine identity, configuration, database, logs, and API key remained inside application-private storage.
-- Remaining physical checks: observe a naturally scheduled one-hour WorkManager exchange, test conflict copy/trash/hash preservation actions, and measure battery behavior while unplugged. USB power during this session made battery-drain measurement invalid.
+- Follow-up physical acceptance on 2026-07-29 observed a naturally scheduled WorkManager run while unplugged. The worker connected to paired device `5KRUWAE`, exchanged files, completed successfully, and stopped after its bounded window. Battery level moved from 30% to 29% during the broader unplugged inspection.
+- Android's aggregate battery statistics since the last charge estimated 32.5 mAh for the app UID: 6.28 mAh foreground, 3.34 mAh background, 0.0405 mAh foreground service, and 0.431 mAh cached. Screen-off/doze attribution included 0.762 mAh CPU, 0.823 mAh camera, and 0.147 mAh Wi-Fi; the recorded WorkManager job used 479 ms and completed once. This is a mixed-use upper bound that includes earlier camera and foreground testing, not an isolated drain benchmark.
+- The same follow-up completed the conflict clipboard, keep-as-new, trash, and SHA-256 preservation checks. A debug-package reinstall preserved the Syncthing certificate and private-key hashes exactly.
 
 ### Android Signed Release Checkpoint - 2026-07-29
 
@@ -262,11 +264,12 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Both APKs pass Android `apksigner` verification with v2 and v3 signature schemes. The AAB passes JAR signature verification. All three artifacts use certificate SHA-256 `bde886bebb20114c53661299f4d40bb679acbe433bb476eb4ab5bf7977efaddd`.
 - Package metadata is `com.slightnotes.v2`, version code `2000000`, version name `2.0.0-alpha.0`, minimum API 26, and target API 36.
 - Collected release artifacts:
-  - arm64-v8a APK: 19,145,066 bytes; SHA-256 `667b0e20b67b29bbeb7412d99ed8420f4ec2b3d2a3240f6bcd4b438eecfa8a2f`.
-  - x86_64 APK: 19,924,052 bytes; SHA-256 `6f5c2d6eefbb67f9057a2d8778b82bf438fb133496fcf7a08077d3bf014b9d3d`.
-  - universal AAB: 37,363,382 bytes; SHA-256 `f3f519306f4c51bbe12494b521880e2eb292031cbcfe384220ec42612ec4a736`.
+  - arm64-v8a APK: 19,145,123 bytes; SHA-256 `5d35b9187387e46ed709a33b518b7044c98b23aebb0353ddf9d58f6f4df39a62`.
+  - x86_64 APK: 19,924,061 bytes; SHA-256 `9decd9076adc0dbe28dda5751b4f0c13bcbeccabf5e34b7d9410e911e9f31f81`.
+  - universal AAB: 37,363,431 bytes; SHA-256 `1dc4348cc1f82a039ea1b1f69108195b791fbd3bcfc7183ab605e60a24630977`.
 - `npm test`, all 31 Rust tests after rebuilding the moved repository cache, arm64/x86_64 debug plus release Kotlin unit-test variants, and macOS desktop application packaging pass at this checkpoint.
 - The signing identity is local and ignored but has not yet been backed up outside the development machine. Store upload validation remains pending.
+- The installed acceptance build uses the Android debug certificate, while release artifacts use the local release certificate. Android rejects an in-place signature change, so the signed APK cannot replace the accepted debug package without uninstalling it and erasing application-private data. The phone's notes and identity were preserved; signed runtime smoke testing remains assigned to a fresh device or disposable test profile.
 
 - Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
 - Android emulator gate: install and launch on an API 36 x86-64 image; verify 320px-430px layout, safe areas, keyboard, rotation, Android back handling, and no horizontal overflow.

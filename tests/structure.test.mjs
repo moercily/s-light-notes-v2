@@ -180,6 +180,7 @@ assert.match(mobileCss, /--landscape-safe-top: max\(env\(safe-area-inset-top\), 
 assert.match(mobileJs, /history\.pushState/);
 assert.match(mobileJs, /note\.isConflict/);
 assert.match(mobileJs, /contentEditable = note\.isConflict/);
+assert.match(mobileJs, /\$\('#mobile-format-bar'\)\.hidden = note\.isConflict/);
 assert.match(mobileJs, /window\.addEventListener\('popstate'/);
 const androidEngine = readFileSync(
   'src-tauri/gen/android/app/src/main/java/com/slightnotes/v2/SyncthingEngine.kt',

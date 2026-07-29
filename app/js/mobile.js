@@ -514,6 +514,7 @@ async function openMobileNote(id) {
     $('#mobile-note-editor').innerHTML = renderMarkdown(note.content || '');
     $('#mobile-note-editor').contentEditable = note.isConflict ? 'false' : 'true';
     $('#mobile-conflict-actions').hidden = !note.isConflict;
+    $('#mobile-format-bar').hidden = note.isConflict;
     $('#mobile-delete-note').hidden = note.isConflict;
     $('#mobile-note-title').textContent = (note.title || '未命名') + (note.isConflict ? ' · 冲突副本' : '');
     setMobileSaveStatus('已加载');
@@ -530,6 +531,7 @@ async function onMobileNewNote() {
     $('#mobile-note-editor').innerHTML = '';
     $('#mobile-note-editor').contentEditable = 'true';
     $('#mobile-conflict-actions').hidden = true;
+    $('#mobile-format-bar').hidden = false;
     $('#mobile-delete-note').hidden = false;
     $('#mobile-note-title').textContent = '新建笔记';
     setMobileSaveStatus('编辑中');
@@ -631,6 +633,7 @@ async function onMobileConflictTrash() {
     $('#mobile-note-editor').innerHTML = '';
     $('#mobile-note-editor').contentEditable = 'true';
     $('#mobile-conflict-actions').hidden = true;
+    $('#mobile-format-bar').hidden = false;
     $('#mobile-delete-note').hidden = false;
     await refreshMobileNotes();
     navigateMobileBack();
