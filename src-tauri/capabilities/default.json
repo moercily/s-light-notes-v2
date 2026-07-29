@@ -3,6 +3,7 @@
   "identifier": "default",
   "description": "Default desktop capability for s-light notes v2",
   "windows": ["main"],
+  "platforms": ["macOS", "windows", "linux"],
   "permissions": [
     "core:default",
     "opener:default"

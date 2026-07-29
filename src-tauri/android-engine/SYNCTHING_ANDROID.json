@@ -1,0 +1,31 @@
+{
+  "product": "Syncthing Android native engine",
+  "version": "v2.1.2",
+  "source": "https://github.com/syncthing/syncthing/archive/refs/tags/v2.1.2.tar.gz",
+  "sourceArchiveSha256": "cddcd03945de492f5c995f6fcda910fc49c1174a74899a26704aae63aa558c4a",
+  "license": "MPL-2.0",
+  "goToolchain": "go1.25.11",
+  "ndk": "28.2.13676358",
+  "minimumApi": 26,
+  "buildTags": ["noupgrade"],
+  "extraLinkFlags": ["-checklinkname=0"],
+  "packaging": "PIE executable stored under jniLibs with a .so suffix; it is not loaded through JNI",
+  "artifacts": [
+    {
+      "abi": "arm64-v8a",
+      "goarch": "arm64",
+      "path": "gen/android/app/src/main/jniLibs/arm64-v8a/libsyncthingnative.so",
+      "sha256": "6c531d1ad2a43345843ae71b85fdfdcf35b422282c15435b29d7cadd4e1f61a1",
+      "elf": "AArch64 PIE executable",
+      "loadAlignment": 16384
+    },
+    {
+      "abi": "x86_64",
+      "goarch": "amd64",
+      "path": "gen/android/app/src/main/jniLibs/x86_64/libsyncthingnative.so",
+      "sha256": "c2a24595879781c38edabb1a7897682dc920f6468fbe1491802e7bc033bd026e",
+      "elf": "x86-64 PIE executable",
+      "loadAlignment": 16384
+    }
+  ]
+}

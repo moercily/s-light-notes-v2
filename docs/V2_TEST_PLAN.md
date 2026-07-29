@@ -182,8 +182,107 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 
 ## Mobile Tests
 
-- Android validates the in-app engine lifecycle, foreground-service notification, battery restrictions, storage permissions, and process recovery.
+### Android Native Engine Build Checkpoint - 2026-07-21
+
+- Syncthing v2.1.2 source archive SHA-256, Go 1.25.11, NDK 28.2.13676358, build flags, ABI paths, and artifact hashes are recorded in `src-tauri/android-engine/SYNCTHING_ANDROID.json`.
+- The arm64-v8a and x86_64 engines are verified as Android 64-bit PIE executables with 16 KB ELF load alignment.
+- Separate arm64 and x86_64 debug builds passed and each APK contained only its selected Rust library and matching Syncthing engine, plus the MPL-2.0 notice.
+- The merged manifest contains `dataSync` foreground-service permissions, an unexported service, no boot receiver, no all-files permission, and extracted native libraries.
+- Kotlin storage and engine-policy tests passed for both ABIs; frontend tests, all 31 Rust tests, and macOS desktop packaging also passed at this checkpoint.
+- Runtime launch, notification behavior, API 35+ timeout cleanup, device identity generation, and P2P transfer now have an API 36 arm64-emulator record. Physical-device validation remains required.
+
+### Android Pairing Build Checkpoint - 2026-07-22
+
+- arm64 and x86-64 debug APK builds pass with the Android sync center, constrained pairing commands, and ZXing scanner activity.
+- Frontend bridge tests verify status, start, stop, pairing preview, confirmation, folder scan, and QR scan calls without API Keys or management ports.
+- Kotlin policy tests reject incomplete device codes, control characters, oversized names, unsafe REST paths, and invalid private credentials.
+- Pairing confirmation is held in memory for five minutes, consumed once, rechecks live device state, shares only `s-light-notes`, verifies both writes, and attempts rollback after failure.
+- The sync center has no horizontal overflow at 320x640, 390x844, or 844x390; long device codes wrap and all tested controls retain at least 44px touch height.
+- Camera denial, manual device-code confirmation, mutual desktop pairing, and real file transfer pass on an API 36 arm64 emulator. A physical API 36 arm64 phone also captured a QR code, parsed the canonical device ID, and rejected the already paired device without changing configuration.
+
+### Android Background Policy Build Checkpoint - Current Branch
+
+- Background policy controls cover opportunity sync, unmetered-only behavior, explicit continued-background sessions, notification permission, and the system battery-settings entry.
+- Kotlin unit tests verify that continued-background sessions cannot become active without notification permission and that network settings map only to `UNMETERED` or `CONNECTED` WorkManager constraints.
+- The unique periodic worker is constrained by battery-not-low and defaults to a one-hour interval with a 15-minute flex window. It does not start a second engine while the app or a visible background session already owns synchronization.
+- WorkManager scheduler metadata may survive a reboot, but a boot-count gate prevents the worker from starting Syncthing until the app has been opened during the current boot.
+- Process lifecycle handling keeps app-owned QR scanning from being treated as a true background transition. Leaving the application stops continuous synchronization unless the user enabled the notified session.
+- API 35+ timeout, notification stop, app-background stop, policy stop, and opportunity-completion reasons are persisted for the sync-center status.
+- Frontend tests and arm64/x86-64 Kotlin compilation and unit tests pass. API 36 emulator checks pass for notification denial, QR permission denial, notification stop, API timeout, force-stop, reboot gating, and foreground/background transitions. Physical foreground/background, notification, force-stop, identity recovery, and naturally timed bounded exchange behavior also pass. On 2026-07-29, JobScheduler recorded one successful worker; Syncthing logs show it connected to the paired desktop, transferred files, and stopped after the opportunity window.
+
+### Android 16 Local Network Compatibility
+
+- Install the API 36 build, enable local-network protection with `adb shell am compat enable RESTRICT_LOCAL_NETWORK com.slightnotes.v2`, and reboot the device or emulator.
+- Before permission is granted, verify the app remains editable, reports that nearby-device access is required, and does not start the native engine from app lifecycle, manual start, or WorkManager.
+- Tap **Start Sync**, deny nearby-device access, and verify local editing remains usable and the action can be retried.
+- Tap **Start Sync** again, grant nearby-device access, and verify engine startup, Syncthing discovery, incoming connections, and direct LAN transfer.
+- Revoke Nearby devices in system settings while the app is backgrounded; reopen the app and verify the managed engine stops and returns to the permission-required state.
+- Confirm the merged manifest includes `NEARBY_WIFI_DEVICES` with `neverForLocation`, and does not include fine/coarse/background location permissions.
+- Restore the default compatibility state after testing with `adb shell am compat disable RESTRICT_LOCAL_NETWORK com.slightnotes.v2`.
+
+### Android Conflict Workflow Checkpoint - Current Branch
+
+- The Android sync bridge filters Syncthing conflict IDs and returns only ID, source ID, and update time; note content is not included in the conflict-status result.
+- The mobile note list marks conflicts separately. Opening one hides the ordinary delete and formatting actions, sets the editor to `contenteditable=false`, and exposes keep-copy, copy-content, and trash actions.
+- Keeping a copy writes the same Markdown content through the normal native save path under a non-conflict unique name. Viewing and copying do not write the original conflict file.
+- A 320x640 browser fixture confirmed no horizontal overflow, 44px conflict actions, a 44px sync-center conflict row, and a read-only editor attribute. The fixture was removed after validation.
+- API 36 runtime acceptance passes for competing Android/desktop offline edits, Syncthing conflict-file creation on both peers, conflict-list refresh, and read-only opening. On the physical arm64 phone, a controlled conflict passed clipboard copy, keep-as-new, and trash checks. The source, conflict, kept copy, and trashed conflict each retained SHA-256 `4eaf4c4ea9883ea8f0c7dfe451557c51e2a363fd1d3c4e2f7962904684d74bca`; only the chosen conflict path moved into `.trash`. Synthetic copies were removed after verification.
+
+### Android API 36 Runtime Acceptance - Current Branch
+
+- Installed the arm64 debug APK on a clean API 36 emulator and verified native Markdown create/save/reopen plus system Files visibility through `DocumentsProvider`.
+- Verified nearby-device denial leaves editing available and prevents engine startup; granting access starts the bundled engine with a fixed loopback-only management endpoint. Later revocation stops it safely.
+- Verified foreground synchronization without notification permission, explicit notified background synchronization, the notification stop action, default background stop, force-stop non-resurrection, reboot gating, and stable Syncthing identity across reopen and reboot.
+- Forced the API 35+ `dataSync` foreground-service timeout and verified the service and child engine stop cleanly with a recorded reason and no crash.
+- Paired the Android runtime with an isolated packaged desktop Syncthing peer using the app's manual device-code confirmation. A note created on Android arrived on desktop, and a desktop-created note arrived in the Android private Markdown directory.
+- Stopped synchronization, edited the same two notes independently on both peers, reconnected, and verified real `.sync-conflict-*` files appeared on both sides and in the app's conflict workflow.
+- Verified camera denial keeps the pairing screen usable, and portrait plus low-height landscape screenshots retain status-bar separation and usable controls.
+- Final regression passed `npm test`, all 31 Rust tests, arm64/x86-64 Kotlin unit tests, both split debug APK builds through the Tauri Android entry point, and macOS application packaging. Reinstalling the final arm64 APK over the tested app preserved notes, conflicts, and the existing Syncthing identity.
+- Final debug artifacts: `app-arm64-debug.apk` SHA-256 `4cc901f48b9f1b66267ce09002b21b440f0099a3f836bd8ccbe82e45c6fd563c`; `app-x86_64-debug.apk` SHA-256 `6e3297ac39ed9ae21065205d0bf626e973311b74ee9312e88587250c5ffd1854`.
+- Not yet passed: x86-64 emulator runtime, controlled long-duration physical-phone power characterization, fresh-install signed-release runtime, and store submission.
+
+### Android 16 Physical Device Acceptance - 2026-07-22
+
+- Installed the arm64 debug APK on a Xiaomi 2211133C running Android 16/API 36 and HyperOS 3.0. The device reported `arm64-v8a`, a 1080x2400 display, and the 2025-10-01 security patch.
+- Created, saved, reopened, and synchronized real Markdown from the application-private notes directory. The system file picker showed the `s-light notes` provider and exposed only ordinary notes and conflict copies, not `.trash`, Syncthing identity, configuration, database, logs, or credentials.
+- Verified the nearby-device permission gate before startup, successful grant, later revocation with immediate engine stop, continued local editing, and recovery after the permission was restored.
+- Paired with an isolated desktop Syncthing peer through the app's preview and confirmation flow. Android-to-desktop and desktop-to-Android creation, modification, offline recovery, and direct LAN transfer passed.
+- Produced a real conflict through independent offline edits. The app listed the conflict, opened it read-only, and preserved its content as a new ordinary note without deleting the original conflict file.
+- Granted camera access only from the scan action and captured a QR code containing the isolated peer ID. Parsing succeeded and duplicate-device protection rejected the existing peer without applying another configuration change.
+- Verified foreground synchronization without notification permission. With an explicit notified background session enabled, the engine remained active after Home and Android reported a persistent notification with a stop action; disabling the session restored default background stop behavior.
+- Verified force-stop prevents process or engine resurrection. Reopening restored the same Syncthing certificate/key identity, fixed folder, paired peer, and scheduled WorkManager task.
+- Portrait keyboard input kept the editor usable. Portrait and landscape layouts retained system-bar separation, stable headers, and usable controls; the landscape keyboard naturally leaves only a shallow editing area on this device.
+- Security checks found the management API only on `127.0.0.1:8386`, while P2P used the expected LAN listener. Engine identity, configuration, database, logs, and API key remained inside application-private storage.
+- Follow-up physical acceptance on 2026-07-29 observed a naturally scheduled WorkManager run while unplugged. The worker connected to paired device `5KRUWAE`, exchanged files, completed successfully, and stopped after its bounded window. Battery level moved from 30% to 29% during the broader unplugged inspection.
+- Android's aggregate battery statistics since the last charge estimated 32.5 mAh for the app UID: 6.28 mAh foreground, 3.34 mAh background, 0.0405 mAh foreground service, and 0.431 mAh cached. Screen-off/doze attribution included 0.762 mAh CPU, 0.823 mAh camera, and 0.147 mAh Wi-Fi; the recorded WorkManager job used 479 ms and completed once. This is a mixed-use upper bound that includes earlier camera and foreground testing, not an isolated drain benchmark.
+- The same follow-up completed the conflict clipboard, keep-as-new, trash, and SHA-256 preservation checks. A debug-package reinstall preserved the Syncthing certificate and private-key hashes exactly.
+
+### Android Signed Release Checkpoint - 2026-07-29
+
+- The release configuration refuses to run without ignored local signing properties. `npm run android:signing:setup` creates a 4096-bit RSA PKCS12 identity and local properties with owner-only permissions and refuses to replace an existing identity.
+- `npm run tauri:android:build:release` targets only aarch64 and x86_64, producing two installable APKs and one universal AAB. The AAB contains both `arm64-v8a` and `x86_64` Rust and Syncthing libraries.
+- Both APKs pass Android `apksigner` verification with v2 and v3 signature schemes. The AAB passes JAR signature verification. All three artifacts use certificate SHA-256 `bde886bebb20114c53661299f4d40bb679acbe433bb476eb4ab5bf7977efaddd`.
+- Package metadata is `com.slightnotes.v2`, version code `2000000`, version name `2.0.0-alpha.0`, minimum API 26, and target API 36.
+- Collected release artifacts:
+  - arm64-v8a APK: 19,145,123 bytes; SHA-256 `5d35b9187387e46ed709a33b518b7044c98b23aebb0353ddf9d58f6f4df39a62`.
+  - x86_64 APK: 19,924,061 bytes; SHA-256 `9decd9076adc0dbe28dda5751b4f0c13bcbeccabf5e34b7d9410e911e9f31f81`.
+  - universal AAB: 37,363,431 bytes; SHA-256 `1dc4348cc1f82a039ea1b1f69108195b791fbd3bcfc7183ab605e60a24630977`.
+- `npm test`, all 31 Rust tests after rebuilding the moved repository cache, arm64/x86_64 debug plus release Kotlin unit-test variants, and macOS desktop application packaging pass at this checkpoint.
+- The signing identity is local and ignored but has not yet been backed up outside the development machine. Store upload validation remains pending.
+- The installed acceptance build uses the Android debug certificate, while release artifacts use the local release certificate. Android rejects an in-place signature change, so the signed APK cannot replace the accepted debug package without uninstalling it and erasing application-private data. The phone's notes and identity were preserved; signed runtime smoke testing remains assigned to a fresh device or disposable test profile.
+
+- Android build gate: target API 36, minimum API 26, NDK 28 or newer, and only the planned `arm64-v8a` and `x86_64` native artifacts.
+- Android emulator gate: install and launch on an API 36 x86-64 image; verify 320px-430px layout, safe areas, keyboard, rotation, Android back handling, and no horizontal overflow.
+- Android storage gate: create, save, reopen, trash, restore, permanently delete, and externally read/edit Markdown through the system `DocumentsProvider`.
+- Android fallback gate: native-storage initialization failures are visible and do not silently move Tauri notes into IndexedDB; PWA continues to use IndexedDB normally.
+- Android engine gate: verify pinned source metadata, ABI hashes, 16 KB page compatibility, isolated identity/config/data/log paths, fixed loopback API, and no desktop sidecar in the APK.
+- Android lifecycle gate: verify foreground start, visible notification, notification stop action, graceful shutdown, early exit, API 35+ timeout handling, and no boot-started data-sync service.
+- Android permission gate: camera denial preserves manual pairing; notification denial preserves foreground sync; battery restrictions and force-stop produce clear recoverable states.
+- Android background gate: WorkManager performs bounded best-effort sync on an unmetered network and does not keep an undocumented daemon alive.
+- Android P2P gate: pair a connected arm64 phone with a packaged desktop, exchange notes in both directions, edit while offline, reconnect, preserve identity, and retain Syncthing conflict copies.
+- Android security gate: normal UI and JavaScript contain no API Key, raw config, arbitrary note path, management port, or LAN-exposed REST endpoint.
+- Android regression gate: run `npm test`, all Rust tests, the macOS desktop build, and the Android build before the first user APK handoff.
 - iOS validates foreground sync, opportunistic background tasks, suspended-state recovery, and clear last-sync status.
-- Android also verifies compatibility with a Syncthing-Fork synchronized folder during migration.
+- Syncthing-Fork is used only as an optional behavior/build reference; the Android APK must not depend on or launch it.
 - iOS keeps Möbius Sync or import/export as a fallback until the embedded engine is release-ready.
 - Mobile UI does not depend on desktop-only Tauri commands.

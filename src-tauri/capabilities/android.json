@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/android-schema.json",
+  "identifier": "android",
+  "description": "Minimal capability set for the Android mobile interface",
+  "windows": ["main"],
+  "platforms": ["android"],
+  "permissions": [
+    "core:default"
+  ]
+}

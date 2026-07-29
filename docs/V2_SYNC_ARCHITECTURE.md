@@ -2,7 +2,7 @@
 
 ## Overview
 
-v2 keeps Syncthing as the sync engine and adds a desktop backend that makes it feel native. The app manages local status, safe proxying, scan requests, and configuration previews while Syncthing handles P2P transfer.
+v2 keeps Syncthing as the sync engine and provides platform-owned lifecycle adapters. Desktop packages manage a sidecar process; Android packages manage a separately built Android-native engine through a Kotlin foreground service. Both paths retain the same constrained status, pairing, scan, confirmation, and rollback behavior.
 
 ## Components
 
@@ -11,6 +11,9 @@ v2 keeps Syncthing as the sync engine and adds a desktop backend that makes it f
 - `js/desktop-service.js`: desktop-only bridge for default-folder Markdown operations.
 - Tauri backend: native command layer for app paths, Syncthing process checks, local API proxying, and safe config previews.
 - Syncthing: bundled desktop sidecar in release builds; existing system installation only as an advanced/development fallback.
+- Android mobile shell: the existing dedicated `mobile.html`, `mobile.css`, and `mobile.js` entry rather than the desktop layout.
+- Android Tauri plugin: Kotlin bridge for foreground service, permissions, system file exposure, QR scanning, battery settings, and Android lifecycle events.
+- Android Syncthing engine: pinned v2.1.2 native artifacts for `arm64-v8a` and `x86_64`; never the desktop external binary.
 
 ## Data Flow
 
@@ -25,6 +28,50 @@ UI action
 ```
 
 In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible. If no desktop backend exists, operations that require native privileges fail with a clear message.
+
+## Android Data Flow
+
+```text
+mobile.html
+  -> mobileStorageService / syncService
+  -> Tauri Rust Android adapter
+  -> Kotlin Tauri plugin
+  -> SyncthingForegroundService
+  -> bundled libsyncthingnative.so PIE executable
+  -> application-owned Markdown directory
+  -> P2P transfer to a desktop device
+```
+
+- The Android editor and Syncthing engine operate on the same application-owned directory of ordinary `.md` files.
+- An Android `DocumentsProvider` exposes active notes and conflict copies through the system file picker without exposing `.trash`, identity, configuration, database, logs, or runtime credentials.
+- PWA mode keeps IndexedDB. Android Tauri mode selects native storage and never silently falls back to IndexedDB after native initialization fails.
+- Platform-specific Tauri configuration loads the mobile entry and clears desktop `externalBin` packaging for Android.
+
+## Android Lifecycle
+
+- Process-level lifecycle observation starts the managed engine when the application becomes visible and avoids treating an in-app QR activity transition as leaving the application.
+- While the app is visible, synchronization remains active without requiring broad storage access.
+- Leaving the app stops continuous synchronization by default. A user-enabled `dataSync` foreground service may keep a bounded background session alive only after notification permission is granted and always provides a stop action.
+- AndroidX WorkManager 2.10.1 owns one unique periodic task. It runs at most once per one-hour interval with a 15-minute flex window, requires battery-not-low, and uses `UNMETERED` by default or `CONNECTED` after an explicit user setting change.
+- The worker skips execution while the application or a user-enabled background session already owns the engine. Otherwise it starts the engine, waits for readiness, scans the fixed notes folder, permits a short exchange window, and stops it.
+- API 35+ timeout callbacks stop the engine before the platform declares an ANR and record a user-visible reason.
+- The app has no boot receiver and never starts its engine or `dataSync` foreground service from `BOOT_COMPLETED`. WorkManager's library components may restore scheduler metadata, but the worker compares Android's boot count and exits until the user opens the app during that boot.
+- Force-stop terminates service and scheduled work. Nothing silently restarts until the user opens the app again.
+- Camera denial preserves manual device-code entry; notification denial preserves foreground synchronization.
+- API 36+ local-network protection uses `NEARBY_WIFI_DEVICES` with `neverForLocation`. The process lifecycle, manual start command, and WorkManager worker all check the native permission before starting Syncthing; the frontend cannot bypass that gate.
+- Battery settings use the general system settings screen. The package does not declare `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` or directly request an exemption.
+
+## Android Native Boundary
+
+- The Android engine is built from pinned Syncthing v2.1.2 source for arm64 and x86-64 with Go 1.25.11 and NDK 28 or newer, and its ELF load segments are verified at 16 KB alignment.
+- `libsyncthingnative.so` is an Android PIE executable stored under `jniLibs` so the package manager extracts it to the private native-library directory. It is launched as a managed child process and is not loaded as a JNI shared library.
+- Kotlin owns process/service lifecycle, safe REST requests, the private API Key, fixed runtime paths, initial folder binding, pairing validation, one-time confirmation tokens, readback, and rollback. Rust exposes only constrained Tauri commands and never returns the credential to JavaScript.
+- The Android sync center receives only device IDs, display names, connection booleans, bounded folder counters, and user-facing messages. It cannot provide device addresses, arbitrary REST paths, folder paths, ports, or raw configuration.
+- ZXing launches only from the explicit scan action. A scan fills the device-code field and still passes through the same preview and confirmation flow as manual entry.
+- The REST endpoint remains loopback-only and fixed by native code. JavaScript cannot provide a port, API base, path, or credential.
+- Android notes paths are resolved natively and cannot be replaced by a frontend-supplied path or document URI.
+- Android conflict discovery reuses the native note-list command and returns only conflict ID, source ID, and timestamp through the sync interface. Opening the corresponding note uses the normal native read boundary, but the mobile editor is forced read-only until the user keeps a new copy, copies content, or trashes the conflict file.
+- Android package metadata records source revision, Go/NDK versions, ABI hashes, and MPL-2.0 notices.
 
 ## Tauri Commands
 
@@ -48,6 +95,10 @@ In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible.
 - `desktop_move_to_trash`: moves a note into the local `.trash` directory.
 - `desktop_restore_note`: restores a note from `.trash`.
 - `desktop_delete_note`: permanently deletes a note from `.trash`.
+- Android-only `android_get_background_policy` and `android_set_background_policy`: read and update constrained opportunity/background choices without exposing native credentials or paths.
+- Android-only `android_request_notification_permission`: requests notification access only after a user action and returns a boolean result.
+- Android-only `android_request_local_network_permission`: requests API 36+ nearby-device access from the explicit sync-start flow and returns a boolean result.
+- Android-only `android_open_battery_settings`: opens system battery settings without requesting an optimization exemption.
 
 ## Desktop Storage Boundary
 
@@ -94,6 +145,6 @@ In Web/PWA mode, `syncService` falls back to existing v1 helpers where possible.
 ## v2 Alpha Limitations
 
 - Desktop sidecars are pinned for macOS Apple Silicon/Intel, Windows x64, and Linux x64. Native package validation remains pending for macOS Intel and Linux x64.
-- QR display, device-code pairing, and sync-center event refresh are available. Camera scanning and conflict-resolution workflows are not complete.
+- QR display/capture, device-code pairing, sync-center event refresh, and the Android read-only conflict workflow are available. API 36 emulator and physical arm64 acceptance have verified direct pairing, bidirectional P2P transfer, offline reconnection, real conflict generation and content-preserving actions, permission recovery, force-stop identity persistence, and one naturally timed bounded WorkManager exchange against an isolated desktop peer. An unplugged mixed-use battery-statistics snapshot is recorded; controlled long-duration power characterization remains open. Signed split APKs and a universal AAB are available through a fail-closed local signing workflow, while fresh-install signed-runtime and store-upload validation remain open.
 - External development override mode still accepts a user-provided API Key; standard bundled-sidecar UI hides those advanced fields.
-- Mobile background sync depends on platform-specific Syncthing clients.
+- Android background sync is bounded by foreground-service and job quotas; it is not an all-day daemon. iOS background behavior remains a separate later track.

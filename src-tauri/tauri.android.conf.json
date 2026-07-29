@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "devUrl": "http://127.0.0.1:8080/mobile.html"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "s-light notes",
+        "url": "mobile.html",
+        "fullscreen": false,
+        "resizable": true
+      }
+    ]
+  },
+  "bundle": {
+    "externalBin": [],
+    "resources": [],
+    "android": {
+      "minSdkVersion": 26
+    }
+  }
+}

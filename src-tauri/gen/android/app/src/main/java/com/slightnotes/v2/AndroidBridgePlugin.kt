@@ -1,0 +1,263 @@
+package com.slightnotes.v2
+
+import android.app.Activity
+import android.os.Build
+import app.tauri.annotation.Command
+import app.tauri.annotation.InvokeArg
+import app.tauri.annotation.TauriPlugin
+import app.tauri.plugin.Invoke
+import app.tauri.plugin.JSArray
+import app.tauri.plugin.JSObject
+import app.tauri.plugin.Plugin
+import org.json.JSONObject
+
+@InvokeArg
+class StorageListArgs {
+    var inTrash: Boolean = false
+}
+
+@InvokeArg
+class StorageReadArgs {
+    lateinit var id: String
+    var inTrash: Boolean = false
+}
+
+@InvokeArg
+class StorageSaveArgs {
+    var id: String? = null
+    lateinit var suggestedId: String
+    lateinit var content: String
+}
+
+@InvokeArg
+class StorageTargetArgs {
+    lateinit var id: String
+}
+
+@InvokeArg
+class PairingPreviewArgs {
+    lateinit var deviceId: String
+    var deviceName: String = ""
+}
+
+@InvokeArg
+class PairingConfirmArgs {
+    lateinit var confirmationToken: String
+}
+
+@InvokeArg
+class BackgroundPolicyArgs {
+    var opportunisticSync: Boolean = true
+    var unmeteredOnly: Boolean = true
+    var backgroundSessionEnabled: Boolean = false
+}
+
+@TauriPlugin
+class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
+    private val appActivity = activity
+    private val noteStore by lazy { NoteStore(activity.filesDir) }
+
+    @Command
+    fun getPlatformStatus(invoke: Invoke) {
+        val engine = SyncthingEngine.snapshot()
+        val status = JSObject().apply {
+            put("platform", "android")
+            put("sdkInt", Build.VERSION.SDK_INT)
+            put("engineState", engine.state.value)
+        }
+        invoke.resolve(status)
+    }
+
+    @Command
+    fun getEngineStatus(invoke: Invoke) {
+        invoke.resolve(engineStatusToJson(SyncthingEngine.snapshot()))
+    }
+
+    @Command
+    fun startEngine(invoke: Invoke) = resolve(invoke) {
+        require(AndroidSyncPolicy.hasLocalNetworkPermission(appActivity)) {
+            "请先允许附近设备权限，再启动 P2P 同步。"
+        }
+        SyncthingForegroundService.start(appActivity)
+        engineStatusToJson(SyncthingEngine.snapshot())
+    }
+
+    @Command
+    fun stopEngine(invoke: Invoke) = resolve(invoke) {
+        SyncthingForegroundService.stop(appActivity)
+        engineStatusToJson(SyncthingEngine.snapshot())
+    }
+
+    @Command
+    fun getPairingInfo(invoke: Invoke) = resolveAsync(invoke) {
+        SyncthingEngine.pairingInfo()
+    }
+
+    @Command
+    fun previewDevicePairing(invoke: Invoke) = resolveAsync(invoke) {
+        val args = invoke.parseArgs(PairingPreviewArgs::class.java)
+        SyncthingEngine.previewDevicePairing(args.deviceId, args.deviceName)
+    }
+
+    @Command
+    fun confirmDevicePairing(invoke: Invoke) = resolveAsync(invoke) {
+        val args = invoke.parseArgs(PairingConfirmArgs::class.java)
+        SyncthingEngine.confirmDevicePairing(args.confirmationToken)
+    }
+
+    @Command
+    fun scanNotesFolder(invoke: Invoke) = resolveAsync(invoke) {
+        SyncthingEngine.scanNotesFolder()
+    }
+
+    @Command
+    fun scanDeviceQr(invoke: Invoke) {
+        val mainActivity = appActivity as? MainActivity
+        if (mainActivity == null) {
+            invoke.reject("当前 Android 页面无法启动二维码扫描。")
+            return
+        }
+        DeviceQrScanner.start(mainActivity, invoke)
+    }
+
+    @Command
+    fun getBackgroundPolicy(invoke: Invoke) = resolve(invoke) {
+        backgroundPolicyToJson(AndroidSyncPolicy.get(appActivity))
+    }
+
+    @Command
+    fun setBackgroundPolicy(invoke: Invoke) = resolve(invoke) {
+        val args = invoke.parseArgs(BackgroundPolicyArgs::class.java)
+        backgroundPolicyToJson(AndroidSyncPolicy.set(
+            appActivity,
+            args.opportunisticSync,
+            args.unmeteredOnly,
+            args.backgroundSessionEnabled,
+        ))
+    }
+
+    @Command
+    fun requestNotificationPermission(invoke: Invoke) {
+        val mainActivity = appActivity as? MainActivity
+        if (mainActivity == null) {
+            invoke.reject("当前 Android 页面无法请求通知权限。")
+            return
+        }
+        NotificationPermissionCoordinator.request(mainActivity, invoke)
+    }
+
+    @Command
+    fun requestLocalNetworkPermission(invoke: Invoke) {
+        val mainActivity = appActivity as? MainActivity
+        if (mainActivity == null) {
+            invoke.reject("当前 Android 页面无法请求局域网权限。")
+            return
+        }
+        LocalNetworkPermissionCoordinator.request(mainActivity, invoke)
+    }
+
+    @Command
+    fun openBatterySettings(invoke: Invoke) = resolve(invoke) {
+        AndroidSyncPolicy.openBatterySettings(appActivity)
+        JSObject().put("opened", true)
+    }
+
+    @Command
+    fun ensureStorage(invoke: Invoke) = resolve(invoke) {
+        noteStore.ensureReady()
+        JSObject().put("ready", true)
+    }
+
+    @Command
+    fun listNotes(invoke: Invoke) = resolve(invoke) {
+        val args = invoke.parseArgs(StorageListArgs::class.java)
+        val notes = JSArray(noteStore.list(args.inTrash).map(::noteToJson))
+        JSObject().put("notes", notes)
+    }
+
+    @Command
+    fun readNote(invoke: Invoke) = resolve(invoke) {
+        val args = invoke.parseArgs(StorageReadArgs::class.java)
+        val note = noteStore.read(args.id, args.inTrash)
+        JSObject().put("note", note?.let(::noteToJson) ?: JSONObject.NULL)
+    }
+
+    @Command
+    fun saveNote(invoke: Invoke) = resolve(invoke) {
+        val args = invoke.parseArgs(StorageSaveArgs::class.java)
+        JSObject().put("note", noteToJson(noteStore.save(args.id, args.suggestedId, args.content)))
+    }
+
+    @Command
+    fun trashNote(invoke: Invoke) = resolve(invoke) {
+        val args = invoke.parseArgs(StorageTargetArgs::class.java)
+        JSObject().put("note", noteToJson(noteStore.moveToTrash(args.id)))
+    }
+
+    @Command
+    fun restoreNote(invoke: Invoke) = resolve(invoke) {
+        val args = invoke.parseArgs(StorageTargetArgs::class.java)
+        JSObject().put("note", noteToJson(noteStore.restore(args.id)))
+    }
+
+    @Command
+    fun deleteNote(invoke: Invoke) = resolve(invoke) {
+        val args = invoke.parseArgs(StorageTargetArgs::class.java)
+        noteStore.delete(args.id)
+        JSObject().put("deleted", true)
+    }
+
+    private fun resolve(invoke: Invoke, operation: () -> JSObject) {
+        try {
+            invoke.resolve(operation())
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "Android 笔记存储操作失败。")
+        }
+    }
+
+    private fun resolveAsync(invoke: Invoke, operation: () -> JSONObject) {
+        Thread({
+            try {
+                invoke.resolve(JSObject(operation().toString()))
+            } catch (error: Exception) {
+                invoke.reject(error.message ?: "Android 同步操作失败。")
+            }
+        }, "slight-android-command").start()
+    }
+
+    private fun noteToJson(note: StoredNote): JSObject {
+        return JSObject().apply {
+            put("id", note.id)
+            put("content", note.content)
+            put("updatedAt", note.updatedAt)
+            put("inTrash", note.inTrash)
+        }
+    }
+
+    private fun engineStatusToJson(status: SyncthingEngine.Snapshot): JSObject {
+        return JSObject().apply {
+            put("mode", "android")
+            put("available", status.available)
+            put("running", status.running)
+            put("managed", true)
+            put("engineKind", "androidNative")
+            put("engineState", status.state.value)
+            put("message", status.message)
+            put("deviceId", status.deviceId ?: JSONObject.NULL)
+            put("folderId", SyncthingEngine.NOTES_FOLDER_ID)
+            put("version", SyncthingEngine.VERSION)
+            put("localNetworkPermissionRequired", AndroidSyncPolicy.requiresLocalNetworkPermission())
+            put("localNetworkPermissionGranted", AndroidSyncPolicy.hasLocalNetworkPermission(appActivity))
+        }
+    }
+
+    private fun backgroundPolicyToJson(policy: BackgroundPolicySnapshot): JSObject {
+        return JSObject().apply {
+            put("opportunisticSync", policy.opportunisticSync)
+            put("unmeteredOnly", policy.unmeteredOnly)
+            put("backgroundSessionEnabled", policy.backgroundSessionEnabled)
+            put("notificationPermissionGranted", policy.notificationPermissionGranted)
+            put("lastStopReason", policy.lastStopReason)
+        }
+    }
+}

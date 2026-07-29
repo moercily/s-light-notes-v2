@@ -19,7 +19,7 @@
         <section id="mobile-list-view" class="mobile-view active" aria-label="笔记列表">
             <header class="mobile-topbar">
                 <h1 id="mobile-list-title">s-light notes</h1>
-                <button id="mobile-settings" class="icon-button" title="设置">☰</button>
+                <button id="mobile-settings" class="icon-button" title="设置" aria-label="设置">☰</button>
             </header>
             <div class="mobile-search-row">
                 <input type="search" id="mobile-search" placeholder="搜索笔记">
@@ -27,7 +27,7 @@
             <ul id="mobile-note-list" class="mobile-note-list">
                 <li class="mobile-empty">暂无笔记</li>
             </ul>
-            <button id="mobile-new-note" class="primary-fab" title="新建笔记">+</button>
+            <button id="mobile-new-note" class="primary-fab" title="新建笔记" aria-label="新建笔记">+</button>
         </section>
 
         <section id="mobile-editor-view" class="mobile-view" aria-label="编辑笔记">
@@ -37,20 +37,29 @@
                     <strong id="mobile-note-title">新建笔记</strong>
                     <span id="mobile-save-status">就绪</span>
                 </div>
-                <button id="mobile-delete-note" class="icon-button danger" title="删除笔记">删</button>
+                <button id="mobile-delete-note" class="icon-button danger" title="删除笔记" aria-label="删除笔记">删</button>
             </header>
             <div id="mobile-editor-scroll">
+                <div id="mobile-conflict-actions" class="mobile-conflict-actions" hidden>
+                    <strong>这是 Syncthing 保留的冲突副本</strong>
+                    <span>原内容以只读方式打开，请选择如何处理。</span>
+                    <div class="sync-actions">
+                        <button id="mobile-conflict-keep" type="button">保留为新笔记</button>
+                        <button id="mobile-conflict-copy" type="button">复制内容</button>
+                        <button id="mobile-conflict-trash" class="danger" type="button">移入回收站</button>
+                    </div>
+                </div>
                 <div id="mobile-note-editor"
                      contenteditable="true"
                      placeholder="写下你的想法...&#10;&#10;首行内容会作为笔记标题。">
                 </div>
             </div>
             <div id="mobile-format-bar" aria-label="格式工具栏">
-                <button data-format="bold"><strong>B</strong></button>
-                <button data-format="italic"><em>I</em></button>
-                <button data-format="heading">H</button>
-                <button data-format="list">☰</button>
-                <button data-format="link">🔗</button>
+                <button data-format="bold" title="粗体" aria-label="粗体"><strong>B</strong></button>
+                <button data-format="italic" title="斜体" aria-label="斜体"><em>I</em></button>
+                <button data-format="heading" title="标题" aria-label="标题">H</button>
+                <button data-format="list" title="列表" aria-label="列表">☰</button>
+                <button data-format="link" title="链接" aria-label="链接">🔗</button>
             </div>
         </section>
 
@@ -63,17 +72,100 @@
             <div class="settings-list">
                 <button id="mobile-import" class="settings-item">导入 Markdown</button>
                 <button id="mobile-export" class="settings-item">导出备份</button>
+                <button id="mobile-sync" class="settings-item" hidden>P2P 同步</button>
                 <button id="mobile-trash" class="settings-item">回收站</button>
                 <button id="mobile-install" class="settings-item" hidden>安装到主屏幕</button>
                 <button id="mobile-theme-toggle" class="settings-item">切换深色模式</button>
                 <p id="mobile-settings-note" class="settings-note">移动端当前默认使用浏览器本地存储。请定期导出备份。</p>
             </div>
         </section>
+
+        <section id="mobile-sync-view" class="mobile-view" aria-label="P2P 同步">
+            <header class="mobile-topbar">
+                <button id="mobile-sync-back" class="text-button">返回</button>
+                <h1>P2P 同步</h1>
+                <button id="mobile-sync-refresh" class="icon-button" title="刷新同步状态" aria-label="刷新同步状态">↻</button>
+            </header>
+            <div class="mobile-sync-scroll">
+                <section class="sync-section" aria-labelledby="mobile-sync-state-title">
+                    <h2 id="mobile-sync-state-title">本机状态</h2>
+                    <strong id="mobile-sync-state">正在检查</strong>
+                    <p id="mobile-sync-message">正在读取本机同步引擎状态。</p>
+                    <div class="sync-actions">
+                        <button id="mobile-sync-start" type="button">启动同步</button>
+                        <button id="mobile-sync-stop" type="button">停止同步</button>
+                        <button id="mobile-sync-scan-folder" type="button">扫描笔记</button>
+                    </div>
+                </section>
+
+                <section class="sync-section" aria-labelledby="mobile-device-code-title">
+                    <h2 id="mobile-device-code-title">本机设备码</h2>
+                    <code id="mobile-device-code">同步引擎就绪后显示</code>
+                    <button id="mobile-copy-device-code" class="sync-wide-button" type="button" disabled>复制设备码</button>
+                </section>
+
+                <section class="sync-section" aria-labelledby="mobile-pair-title">
+                    <h2 id="mobile-pair-title">添加设备</h2>
+                    <label for="mobile-remote-device-id">另一台设备的设备码</label>
+                    <textarea id="mobile-remote-device-id" rows="3" autocomplete="off" autocapitalize="characters" spellcheck="false"></textarea>
+                    <label for="mobile-remote-device-name">设备名称</label>
+                    <input id="mobile-remote-device-name" type="text" maxlength="64" placeholder="另一台设备">
+                    <div class="sync-actions">
+                        <button id="mobile-scan-device-qr" type="button">扫描二维码</button>
+                        <button id="mobile-preview-pairing" type="button">检查设备码</button>
+                    </div>
+                    <p id="mobile-pairing-message" role="status" aria-live="polite" hidden></p>
+                    <div id="mobile-pairing-preview" class="sync-preview" hidden>
+                        <strong id="mobile-pairing-device"></strong>
+                        <p id="mobile-pairing-summary"></p>
+                        <button id="mobile-confirm-pairing" class="sync-wide-button" type="button">确认添加并共享笔记</button>
+                    </div>
+                </section>
+
+                <section class="sync-section" aria-labelledby="mobile-devices-title">
+                    <h2 id="mobile-devices-title">已添加设备</h2>
+                    <ul id="mobile-sync-devices" class="sync-device-list">
+                        <li>暂无设备</li>
+                    </ul>
+                    <p id="mobile-folder-state">笔记文件夹：等待状态</p>
+                </section>
+
+                <section class="sync-section" aria-labelledby="mobile-conflicts-title">
+                    <h2 id="mobile-conflicts-title">冲突副本</h2>
+                    <ul id="mobile-sync-conflicts" class="sync-conflict-list">
+                        <li>当前没有冲突副本</li>
+                    </ul>
+                </section>
+
+                <section class="sync-section" aria-labelledby="mobile-background-title">
+                    <h2 id="mobile-background-title">后台同步</h2>
+                    <label class="sync-toggle-row" for="mobile-opportunistic-sync">
+                        <span><strong>机会同步</strong><small>系统安排短时同步，不会全天驻留</small></span>
+                        <input id="mobile-opportunistic-sync" type="checkbox">
+                    </label>
+                    <label class="sync-toggle-row" for="mobile-unmetered-only">
+                        <span><strong>仅非计费网络</strong><small>避免使用移动流量执行机会同步</small></span>
+                        <input id="mobile-unmetered-only" type="checkbox">
+                    </label>
+                    <label class="sync-toggle-row" for="mobile-background-session">
+                        <span><strong>离开应用后继续</strong><small>需要通知权限，并显示持续同步通知</small></span>
+                        <input id="mobile-background-session" type="checkbox">
+                    </label>
+                    <p id="mobile-background-message">正在读取后台策略。</p>
+                    <div class="sync-actions">
+                        <button id="mobile-request-notification" type="button">允许同步通知</button>
+                        <button id="mobile-open-battery-settings" type="button">电池设置</button>
+                    </div>
+                </section>
+            </div>
+        </section>
     </main>
 
     <script src="js/utils.js"></script>
+    <script src="js/mobile-storage-service.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/editor.js"></script>
+    <script src="js/android-sync-service.js"></script>
     <script src="js/mobile.js"></script>
 </body>
 </html>
