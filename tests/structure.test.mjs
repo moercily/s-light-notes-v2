@@ -65,6 +65,16 @@ const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 const tauriMain = readFileSync('src-tauri/src/main.rs', 'utf8');
 const tauriLib = readFileSync('src-tauri/src/lib.rs', 'utf8');
 const androidRust = readFileSync('src-tauri/src/android.rs', 'utf8');
+// Commands shared with the desktop manifest also need mobile authorization.
+const appManifest = readFileSync('src-tauri/build.rs', 'utf8');
+const androidCapability = JSON.parse(readFileSync('src-tauri/capabilities/android.json', 'utf8'));
+const mobileHandlers = androidRust.match(/generate_handler!\[([\s\S]*?)\]/)[1];
+for (const [, command] of appManifest.matchAll(/"([a-z_]+)"/g)) {
+  if (new RegExp(`\\b${command}\\b`).test(mobileHandlers)) {
+    assert.ok(androidCapability.permissions.includes('allow-' + command.replaceAll('_', '-')),
+      `Android must retain permission for shared command ${command}`);
+  }
+}
 const androidBuild = readFileSync('src-tauri/gen/android/app/build.gradle.kts', 'utf8');
 const androidManifest = readFileSync(
   'src-tauri/gen/android/app/src/main/AndroidManifest.xml',

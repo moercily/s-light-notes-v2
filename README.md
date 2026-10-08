@@ -46,6 +46,14 @@ release. Losing them prevents future signed upgrades.
 ## Current Alpha Boundary
 
 - Desktop Markdown create, edit, save, trash, restore, and permanent deletion are implemented.
+- Current application version is `0.0.1`: major features, minor features, then
+  functional adjustments/bug fixes/optimization.
+- Desktop settings use **通用 / 便签设置 / 同步设置 / 关于**. General includes
+  optional login startup; sticky settings record a key combination followed by
+  Esc to save, or Esc alone to clear. New installations have no shortcut;
+  existing bindings are preserved. See [settings](docs/V2_SETTINGS.md).
+- Desktop sticky windows support new notes and reopening existing notes, autosave,
+  and a pin button immediately left of close. See [sticky notes](docs/V2_STICKY_NOTES.md).
 - Desktop packages manage pinned Syncthing v2.1.2 sidecars for macOS
   Apple Silicon/Intel, Windows x64, and Linux x64.
 - The Android API 36 client stores real Markdown, exposes notes through the

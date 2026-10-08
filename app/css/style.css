@@ -24,6 +24,17 @@
     --transition-theme: background 0.3s, color 0.3s, border-color 0.3s;
 }
 
+.sticky-settings-dialog {
+    margin: auto; padding: 24px; width: min(440px, 90vw);
+    color: var(--text-primary); background: var(--bg-primary);
+    border: 1px solid var(--border-color); border-radius: 12px;
+}
+.sticky-settings-dialog::backdrop { background: #0006; }
+.sticky-settings-dialog p { margin: 12px 0; font-size: 13px; }
+.sticky-settings-dialog input { display: block; width: 100%; padding: 10px; margin-top: 8px; color: inherit; background: var(--bg-secondary); border: 1px solid var(--border-color); }
+.note-item-sticky { border: 0; background: none; color: var(--text-secondary); cursor: pointer; padding: 8px; }
+#btn-new-sticky, #btn-open-sticky { border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); padding: 6px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+
 /* 深色主题 */
 [data-theme="dark"] {
     --bg-primary: #1e1e2e;

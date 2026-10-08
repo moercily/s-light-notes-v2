@@ -5,6 +5,12 @@
   "windows": ["main"],
   "platforms": ["android"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "allow-syncthing-status",
+    "allow-syncthing-start",
+    "allow-syncthing-stop",
+    "allow-syncthing-pairing-info",
+    "allow-syncthing-preview-device-pairing",
+    "allow-syncthing-confirm-device-pairing"
   ]
 }

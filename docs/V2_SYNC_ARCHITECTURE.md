@@ -112,7 +112,18 @@ mobile.html
 ## Desktop Lifecycle
 
 - The alpha product lifecycle is app-bound: closing the final window or quitting the app stops the bundled sidecar.
-- Manual stop, window destruction, app exit requests, final event-loop exit, and future Tauri restart requests share the same backend cleanup path.
+- Manual stop, final window destruction, approved app exit requests, final
+  event-loop exit, and future Tauri restart requests share the same backend cleanup path.
+- Closing an individual main or sticky window does not stop the sidecar while
+  another window remains. Before close, the backend sends a flush event only to
+  the target window; app quit waits for acknowledgements from every window.
+- Main and sticky editors serialize their own save requests. A backend write
+  mutex and SHA-256 content version reject stale in-app writes; same-directory
+  temporary files plus rename prevent readers observing partially written Markdown.
+  External programs do not participate in the mutex, so this is optimistic
+  conflict detection, not a filesystem-wide transaction.
+- [`V2_STICKY_NOTES.md`](V2_STICKY_NOTES.md) describes window permissions,
+  local placement settings, and the shared editing protocol.
 - Cleanup first posts to the authenticated Syncthing `/rest/system/shutdown` endpoint and waits for health to disappear. It kills only the app-tracked child if graceful shutdown exceeds the bounded timeout.
 - A running app can also shut down an authenticated app-owned sidecar left by an earlier interrupted instance, even when no child handle remains.
 - Syncthing identity, database, and configuration remain in the application-data directory and are not deleted during shutdown or app replacement.

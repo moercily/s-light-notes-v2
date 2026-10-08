@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>便签 · s-light notes</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/sticky.css">
+</head>
+<body>
+    <header id="sticky-titlebar">
+        <button id="sticky-new" title="新建便签" aria-label="新建便签">＋</button>
+        <span id="note-title-display" title="拖动窗口">新便签</span>
+        <button id="sticky-pin" title="置顶" aria-label="置顶" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8l-1 7 4 4v2H5v-2l4-4-1-7Zm4 13v6"/></svg></button>
+        <button id="sticky-close" title="保存并关闭" aria-label="保存并关闭">×</button>
+    </header>
+    <div id="sticky-readonly" hidden>只读笔记 <button id="sticky-copy">保留为新笔记</button></div>
+    <main id="sticky-body"><div id="note-editor" contenteditable="false" role="textbox" aria-label="便签正文" aria-multiline="true" placeholder="写下你的想法…"></div></main>
+    <footer id="sticky-footer"><span id="status-save" role="status">加载中…</span><button id="sticky-save">保存</button><button id="sticky-main">全部笔记</button></footer>
+    <div id="conflict-dialog" class="dialog-overlay hidden"><div class="dialog-box"><p>笔记已在其他位置修改或删除。当前编辑仍保留。</p><div class="dialog-buttons"><button id="conflict-reload">重新加载</button><button id="conflict-copy">另存副本</button><button id="conflict-cancel">取消</button></div></div></div>
+    <div id="format-toolbar" class="hidden">
+        <button data-format="bold" title="加粗"><strong>B</strong></button>
+        <button data-format="italic" title="斜体"><em>I</em></button>
+        <button data-format="code" title="代码">&lt;/&gt;</button>
+        <button data-format="heading" title="标题">H</button>
+        <button data-format="list" title="列表">☰</button>
+        <button data-format="quote" title="引用">❝</button>
+        <button data-format="link" title="链接">↗</button>
+    </div>
+    <script src="js/utils.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/desktop-service.js"></script>
+    <script src="js/editor.js"></script>
+    <script src="js/desktop-editing.js"></script>
+    <script src="js/sticky.js"></script>
+</body>
+</html>

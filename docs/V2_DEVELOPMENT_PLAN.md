@@ -25,10 +25,12 @@ Completed and verified:
 - Device-code pairing with validation, preview, second confirmation, folder sharing, readback, and rollback.
 - Offline local-device QR display with manual code copy fallback.
 - Bounded Syncthing event polling while the sync center is open.
-- Graceful sidecar shutdown on manual stop, window close, app quit, and Tauri restart requests.
+- Graceful sidecar shutdown on manual stop, final window close, app quit, and Tauri restart requests.
 - Sidecar fallback termination when graceful shutdown exceeds its bounded timeout.
 - macOS Apple Silicon packaged-app validation, including restart identity preservation and exit cleanup.
-- Frontend test suite and 31 Rust tests passing at the latest implementation checkpoint.
+- Desktop sticky windows, pinning, shared version-checked save queue, and configurable global shortcuts.
+- Extensible four-category desktop settings, login startup, and Esc-confirmed shortcut recording.
+- All nine frontend suites and 35 Rust tests pass at the 2026-10-08 settings checkpoint.
 
 Known release gaps:
 
@@ -40,7 +42,12 @@ Known release gaps:
 - Android naturally scheduled WorkManager exchange, unplugged aggregate power observation, and conflict-action integrity checks pass on the physical arm64 device. Signed APK/AAB packaging is complete; a controlled long-duration power run and store submission remain pending.
 - Automatic installer/updater integration has not been created.
 
-Current implementation focus (2026-07-29): secure the Android release identity outside the development machine, prepare fresh-install/store-upload validation, and resume the remaining cross-platform acceptance work.
+Current checkpoint (2026-10-08): desktop sticky implementation and macOS window
+lifecycle acceptance are complete; cross-application physical shortcut input and
+Windows/Linux sticky runtime acceptance remain pending. See
+[`V2_STICKY_NOTES.md`](V2_STICKY_NOTES.md). Android release identity backup,
+fresh-install/store-upload validation, and the existing platform release gaps
+remain separate work.
 
 ## 3. Product Release Target
 

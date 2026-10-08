@@ -1,5 +1,31 @@
 # s-light notes v2 Test Plan
 
+## Desktop Sticky Checkpoint — 2026-10-08
+
+All eight frontend suites and 34 Rust tests pass. macOS Apple Silicon release
+packaging and Android arm64 debug APK packaging pass. Native macOS sticky
+save/reopen, pin persistence, main-window recreation, individual close,
+empty-draft reuse, and multi-window quit were exercised.
+
+Physical-key activation in another application, Windows/Linux sticky runtime,
+and this checkpoint's Android phone regression remain unverified. Detailed
+steps and evidence limits are in [`V2_STICKY_NOTES.md`](V2_STICKY_NOTES.md).
+
+## Settings / 0.0.1 Checkpoint — 2026-10-08
+
+All nine frontend suites and 35 Rust tests pass. Packaged macOS settings were
+checked for four-category navigation, icon/name/version, key capture + Esc
+commit, Esc-only removal, cancellation on navigation, sync status refresh,
+and login-startup registration/removal. A second executable launch exited
+successfully with one application instance remaining. Autostart and shortcut
+settings were restored to their pre-test state.
+
+The macOS bundle reports `0.0.1`; the arm64 Android debug APK reports
+version name `0.0.1` and version code `2000001`, above the existing release's
+`2000000`. Login after reboot, Windows/Linux native settings acceptance,
+cross-application physical shortcut input, and phone runtime testing remain
+separate unverified gates. See [`V2_SETTINGS.md`](V2_SETTINGS.md).
+
 ## Automated Tests
 
 - From `v2/`, `npm test`

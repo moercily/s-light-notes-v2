@@ -351,6 +351,7 @@ function normalizeDesktopNote(note) {
         title: extractTitle(note.content),
         content: note.content,
         updatedAt: note.updatedAt,
+        version: note.version,
         inTrash: !!note.inTrash,
         isConflict: isConflict,
         conflictSourceId: isConflict ? getConflictSourceId(fileName) : null,

@@ -11,6 +11,8 @@ function loadNoteToEditor(note) {
     if (!note) return;
     const editor = $('#note-editor');
     if (!editor) return;
+    AppState._editSession = (AppState._editSession || 0) + 1;
+    AppState._version = note.version;
 
     // 渲染 markdown 为 HTML 并注入
     const html = renderMarkdown(note.content || '');
@@ -46,6 +48,8 @@ function getEditorContent() {
  * 清空编辑器
  */
 function clearEditor() {
+    AppState._editSession = (AppState._editSession || 0) + 1;
+    AppState._version = null;
     const editor = $('#note-editor');
     if (editor) editor.innerHTML = '';
     clearUndoStack();
@@ -68,6 +72,9 @@ function canWriteCurrentStorage() {
 }
 
 async function saveCurrentNote(options = {}) {
+    if (AppState.storageMode === 'desktop' && window.DesktopEditing) {
+        return DesktopEditing.save();
+    }
     if (AppState._showTrash) return;
     const content = getEditorContent();
     if (!content.trim() && !AppState.currentNoteId) return;
@@ -109,8 +116,9 @@ async function saveCurrentNote(options = {}) {
 }
 
 const autoSave = debounce(async () => {
-    if (AppState.isDirty && !AppState._showTrash && getEditorContent().trim()) {
-        await saveCurrentNote();
+    if (AppState.isDirty && !AppState._showTrash && !AppState._currentNoteReadOnly &&
+        (AppState.currentNoteId || getEditorContent().trim())) {
+        try { await saveCurrentNote(); } catch (_) { /* Status and retry remain visible. */ }
     }
 }, 500);
 
@@ -130,14 +138,14 @@ async function onManualSave() {
 // ========== 编辑器输入事件 ==========
 
 function onEditorInput() {
-    if (AppState._showTrash) return;
+    if (AppState._showTrash || AppState._currentNoteReadOnly) return;
     AppState.isDirty = true;
     updateStatusBarText('save', '未保存...');
 
     const content = getEditorContent();
     updateStatusBarText('stats', '字数：' + countWords(content));
 
-    if (content.trim()) autoSave();
+    if (content.trim() || AppState.currentNoteId) autoSave();
 }
 
 // ====================================================
@@ -824,7 +832,7 @@ function showFormatToolbar(editor, toolbar) {
         return;
     }
 
-    if (AppState._showTrash) return;
+    if (AppState._showTrash || AppState._currentNoteReadOnly) return;
 
     // 确保选区在编辑器内
     if (!editor.contains(sel.anchorNode)) {
@@ -875,6 +883,7 @@ function hideFormatToolbar(toolbar) {
  * 应用/取消格式到 contenteditable 的选中区域（全部为 toggle 模式）
  */
 function applyFormat(format, editor) {
+    if (AppState._showTrash || AppState._currentNoteReadOnly) return;
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
 

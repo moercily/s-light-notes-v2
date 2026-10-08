@@ -20,6 +20,21 @@ s-light notes v2 is a P2P synced Markdown notes app. Notes remain ordinary `.md`
 - The app shows P2P sync status in a dedicated sync center.
 - The v2 alpha sync center clearly states that quitting the app stops P2P synchronization.
 - The app keeps editing usable when Syncthing is unavailable.
+- Desktop exposes one settings entry with General, Sticky, Sync, and About
+  categories. Categories and their setting groups are independently extensible.
+- Login startup is an explicit, default-off desktop choice. Global sticky
+  shortcuts are recorded from keyboard input and saved with Esc; Esc alone
+  removes the binding. Existing bindings survive the settings migration.
+- The app displays version `0.0.1`. The three components mean major features,
+  minor features, and functional adjustment/bug fix/optimization respectively.
+- Desktop notes can open in independent editable sticky windows. Their pin
+  button sits immediately left of close, and the shortcut can be configured.
+- Closing the main window keeps open sticky windows usable; closing the last
+  window or quitting the application saves edits before stopping synchronization.
+
+Desktop sticky requirements and acceptance boundaries are recorded in
+[`V2_STICKY_NOTES.md`](V2_STICKY_NOTES.md). Android does not use desktop floating
+windows or desktop global shortcuts.
 
 ## Platform Policy
 

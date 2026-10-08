@@ -4,7 +4,7 @@
    ============================================ */
 
 const CACHE_PREFIX = 's-light-notes-v2-';
-const CACHE_NAME = CACHE_PREFIX + 'alpha-6';
+const CACHE_NAME = CACHE_PREFIX + '0.0.1-settings-1';
 
 // 需要缓存的静态资源
 const STATIC_ASSETS = [
@@ -15,7 +15,20 @@ const STATIC_ASSETS = [
     './manifest.mobile.json',
     './css/style.css',
     './css/mobile.css',
+    './css/settings.css',
     './js/utils.js',
+    './js/app-info.js',
+    './js/desktop-editing.js',
+    './js/desktop-sticky-ui.js',
+    './js/settings/service.js',
+    './js/settings/core.js',
+    './js/settings/controls.js',
+    './js/settings/shortcut-recorder.js',
+    './js/settings/general.js',
+    './js/settings/sticky.js',
+    './js/settings/sync-actions.js',
+    './js/settings/sync.js',
+    './js/settings/about.js',
     './js/storage.js',
     './js/desktop-service.js',
     './js/mobile-storage-service.js',

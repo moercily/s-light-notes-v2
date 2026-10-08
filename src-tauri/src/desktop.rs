@@ -1,6 +1,7 @@
 use qrcode::render::svg;
 use qrcode::{EcLevel, QrCode};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
@@ -11,7 +12,12 @@ use std::process::{Child, Command};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
+mod sticky;
+mod settings;
+
+#[derive(Default)]
+struct NoteWrites(Mutex<()>);
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
@@ -179,6 +185,7 @@ struct NoteSaveRequest {
     id: Option<String>,
     suggested_id: String,
     content: String,
+    expected_version: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -193,6 +200,7 @@ struct DesktopNote {
     content: String,
     updated_at: u64,
     in_trash: bool,
+    version: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -200,6 +208,7 @@ struct DesktopNote {
 struct SavedNote {
     id: String,
     updated_at: u64,
+    version: String,
 }
 
 #[tauri::command]
@@ -242,30 +251,80 @@ fn desktop_read_note(
 }
 
 #[tauri::command]
-fn desktop_save_note(app: AppHandle, request: NoteSaveRequest) -> Result<SavedNote, String> {
+fn desktop_save_note(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    request: NoteSaveRequest,
+) -> Result<SavedNote, String> {
+    let writes = app.state::<NoteWrites>();
+    let _guard = writes.0.lock().map_err(|_| "保存锁不可用")?;
     let notes_dir = default_notes_dir(&app)?;
-    save_note_in_dir(
+    validate_note_version(
+        &notes_dir,
+        request.id.as_deref(),
+        request.expected_version.as_deref(),
+    )?;
+    let saved = save_note_in_dir(
         &notes_dir,
         request.id.as_deref(),
         &request.suggested_id,
         &request.content,
-    )
+    )?;
+    sticky::bind_saved_note(&window, &saved.id);
+    let _ = app.emit(
+        "notes-changed",
+        serde_json::json!({"id": saved.id, "source": window.label()}),
+    );
+    Ok(saved)
+}
+
+fn content_version(content: &str) -> String {
+    format!("{:x}", Sha256::digest(content.as_bytes()))
+}
+
+fn validate_note_version(
+    directory: &Path,
+    id: Option<&str>,
+    expected: Option<&str>,
+) -> Result<(), String> {
+    if let Some(id) = id {
+        if id.contains(".sync-conflict-") {
+            return Err("冲突副本为只读，请另存为新笔记。".into());
+        }
+        let current = read_note_in_dir(directory, id, false)?;
+        if current.as_ref().map(|note| note.version.as_str()) != expected || expected.is_none() {
+            return Err(
+                "NOTE_CONFLICT: 笔记已在其他窗口修改、删除或移动，请重新加载或另存副本。".into(),
+            );
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
 fn desktop_move_to_trash(app: AppHandle, request: NoteTargetRequest) -> Result<(), String> {
+    let writes = app.state::<NoteWrites>();
+    let _guard = writes.0.lock().map_err(|_| "保存锁不可用")?;
     let notes_dir = default_notes_dir(&app)?;
-    move_note_to_trash(&notes_dir, &request.id)
+    move_note_to_trash(&notes_dir, &request.id)?;
+    let _ = app.emit("notes-changed", serde_json::json!({"id": request.id}));
+    Ok(())
 }
 
 #[tauri::command]
 fn desktop_restore_note(app: AppHandle, request: NoteTargetRequest) -> Result<(), String> {
+    let writes = app.state::<NoteWrites>();
+    let _guard = writes.0.lock().map_err(|_| "保存锁不可用")?;
     let notes_dir = default_notes_dir(&app)?;
-    restore_note_from_trash(&notes_dir, &request.id)
+    restore_note_from_trash(&notes_dir, &request.id)?;
+    let _ = app.emit("notes-changed", serde_json::json!({"id": request.id}));
+    Ok(())
 }
 
 #[tauri::command]
 fn desktop_delete_note(app: AppHandle, request: NoteTargetRequest) -> Result<(), String> {
+    let writes = app.state::<NoteWrites>();
+    let _guard = writes.0.lock().map_err(|_| "保存锁不可用")?;
     let notes_dir = default_notes_dir(&app)?;
     permanently_delete_note(&notes_dir, &request.id)
 }
@@ -1611,6 +1670,7 @@ fn desktop_note_from_path(path: &Path, in_trash: bool) -> Result<DesktopNote, St
     let metadata = fs::metadata(path).map_err(|err| format!("无法读取笔记信息：{err}"))?;
     Ok(DesktopNote {
         id: id.to_string(),
+        version: content_version(&content),
         content,
         updated_at: modified_millis(&metadata),
         in_trash,
@@ -1680,11 +1740,31 @@ fn save_note_in_dir(
     if path.exists() {
         ensure_regular_note_file(&path)?;
     }
-    fs::write(&path, content).map_err(|err| format!("无法保存笔记：{err}"))?;
+    // Never expose a partially written Markdown file to another window or Syncthing.
+    let temporary = directory.join(format!(
+        ".slight-{}-{}.tmp",
+        std::process::id(),
+        CONFIG_TOKEN_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    let write_result = (|| -> std::io::Result<()> {
+        use std::io::Write;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(content.as_bytes())?;
+        file.sync_all()?;
+        fs::rename(&temporary, &path)
+    })();
+    if let Err(error) = write_result {
+        let _ = fs::remove_file(&temporary);
+        return Err(format!("无法保存笔记：{error}"));
+    }
     let metadata = fs::metadata(&path).map_err(|err| format!("无法读取保存结果：{err}"))?;
     Ok(SavedNote {
         id,
         updated_at: modified_millis(&metadata),
+        version: content_version(content),
     })
 }
 
@@ -2228,13 +2308,21 @@ fn apply_api_key(request: ureq::Request, api_key: Option<&str>) -> ureq::Request
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            let target = app.clone();
+            let _ = app.run_on_main_thread(move || { let _ = sticky::show_main(&target); });
+        }))
+        .plugin(tauri_plugin_autostart::Builder::new().app_name("s-light notes").build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .manage(SyncthingProcess::default())
         .manage(SyncthingSidecar::default())
         .manage(PendingFolderConfigs::default())
         .manage(PendingDevicePairings::default())
+        .manage(NoteWrites::default())
+        .manage(sticky::StickyState::default())
         .setup(|app| {
+            sticky::setup(app)?;
             let handle = app.handle().clone();
             tauri::async_runtime::spawn_blocking(move || {
                 let external = handle.state::<SyncthingProcess>();
@@ -2246,12 +2334,21 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if !matches!(event, tauri::WindowEvent::Destroyed) {
-                return;
-            }
-            cleanup_managed_sync(window.app_handle());
+            sticky::on_window_event(window, event);
         })
         .invoke_handler(tauri::generate_handler![
+            sticky::sticky_open,
+            sticky::sticky_context,
+            sticky::sticky_pin,
+            sticky::sticky_dirty,
+            sticky::sticky_main,
+            sticky::sticky_settings,
+            sticky::sticky_set_shortcut,
+            sticky::sticky_begin_recording,
+            sticky::sticky_end_recording,
+            settings::settings_autostart,
+            settings::settings_set_autostart,
+            sticky::desktop_close_ready,
             get_app_paths,
             ensure_notes_folder,
             desktop_list_notes,
@@ -2275,13 +2372,16 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while running s-light notes");
-    app.run(|app_handle, event| {
-        if matches!(
-            event,
-            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
-        ) {
-            cleanup_managed_sync(app_handle);
+    app.run(|app_handle, event| match event {
+        tauri::RunEvent::ExitRequested { api, .. } => {
+            if sticky::request_exit(app_handle) {
+                api.prevent_exit();
+            } else {
+                cleanup_managed_sync(app_handle);
+            }
         }
+        tauri::RunEvent::Exit => cleanup_managed_sync(app_handle),
+        _ => {}
     });
 }
 
@@ -2292,6 +2392,44 @@ mod tests {
     use std::net::{TcpListener, TcpStream};
     use std::sync::Arc;
     use std::thread::{self, JoinHandle};
+
+    #[test]
+    fn stale_windows_and_deleted_notes_cannot_overwrite() {
+        let dir = temporary_notes_dir("sticky-versions");
+        let first = save_note_in_dir(&dir, None, "note", "first").unwrap();
+        assert!(validate_note_version(&dir, Some(&first.id), Some(&first.version)).is_ok());
+        let second = save_note_in_dir(&dir, Some(&first.id), "note", "second").unwrap();
+        assert_ne!(first.version, second.version);
+        assert!(
+            validate_note_version(&dir, Some(&first.id), Some(&first.version))
+                .unwrap_err()
+                .contains("NOTE_CONFLICT")
+        );
+        assert!(validate_note_version(&dir, Some(&first.id), None).is_err());
+        move_note_to_trash(&dir, &first.id).unwrap();
+        assert!(validate_note_version(&dir, Some(&first.id), Some(&second.version)).is_err());
+        assert!(validate_note_version(&dir, None, None).is_ok());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn content_versions_detect_external_changes_and_allow_empty_notes() {
+        let dir = temporary_notes_dir("sticky-empty");
+        let first = save_note_in_dir(&dir, None, "note", "first").unwrap();
+        fs::write(dir.join("note.md"), "external").unwrap();
+        assert!(validate_note_version(&dir, Some("note"), Some(&first.version)).is_err());
+        let external = read_note_in_dir(&dir, "note", false).unwrap().unwrap();
+        assert!(validate_note_version(&dir, Some("note"), Some(&external.version)).is_ok());
+        let empty = save_note_in_dir(&dir, Some("note"), "note", "").unwrap();
+        assert_eq!(empty.version, content_version(""));
+        assert_eq!(fs::read_to_string(dir.join("note.md")).unwrap(), "");
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        assert!(
+            validate_note_version(&dir, Some("note.sync-conflict-test"), Some(&empty.version))
+                .is_err()
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn rejects_relative_proxy_paths() {

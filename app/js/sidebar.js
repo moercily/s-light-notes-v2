@@ -13,6 +13,11 @@
 function renderNoteList(notes, highlightId) {
     const listEl = $('#note-list');
     if (!listEl) return;
+    const currentId = highlightId || AppState.currentNoteId;
+    const renderKey = JSON.stringify([AppState._showTrash, currentId, (notes || []).map(note =>
+        [note.id, note.title, note.updatedAt, note.version, note.isConflict, formatDate(note.updatedAt)])]);
+    if (listEl.dataset.renderKey === renderKey) return;
+    listEl.dataset.renderKey = renderKey;
 
     // 清空列表
     listEl.innerHTML = '';
@@ -23,8 +28,6 @@ function renderNoteList(notes, highlightId) {
             '</li>';
         return;
     }
-
-    const currentId = highlightId || AppState.currentNoteId;
 
     notes.forEach(note => {
         const li = createNoteItem(note, note.id === currentId);
@@ -47,6 +50,18 @@ function createNoteItem(note, isActive) {
     const li = document.createElement('li');
     li.className = 'note-item' + (isActive ? ' active' : '');
     li.dataset.noteId = note.id;
+    if (AppState.storageMode === 'desktop' && typeof openNoteAsSticky === 'function') {
+        const menu = document.createElement('button');
+        menu.textContent = '↗';
+        menu.className = 'note-item-sticky';
+        menu.title = '在便签中打开';
+        menu.setAttribute('aria-label', '在便签中打开 ' + (note.title || '未命名'));
+        menu.onclick = event => {
+            event.stopPropagation();
+            openNoteAsSticky(note.id, AppState._showTrash);
+        };
+        li.append(menu);
+    }
 
     const content = document.createElement('div');
     content.className = 'note-item-content';

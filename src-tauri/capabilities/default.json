@@ -6,6 +6,14 @@
   "platforms": ["macOS", "windows", "linux"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "opener:default",
+    "allow-get-app-paths", "allow-ensure-notes-folder", "allow-desktop-list-notes", "allow-desktop-read-note",
+    "allow-desktop-save-note", "allow-desktop-move-to-trash", "allow-desktop-restore-note", "allow-desktop-delete-note",
+    "allow-syncthing-status", "allow-syncthing-start", "allow-syncthing-stop", "allow-syncthing-proxy-request",
+    "allow-syncthing-apply-folder-config", "allow-syncthing-confirm-folder-config", "allow-syncthing-pairing-info",
+    "allow-syncthing-events", "allow-syncthing-preview-device-pairing", "allow-syncthing-confirm-device-pairing",
+    "allow-open-notes-folder", "allow-open-syncthing-web", "allow-sticky-open", "allow-sticky-settings",
+    "allow-sticky-set-shortcut", "allow-sticky-begin-recording", "allow-sticky-end-recording",
+    "allow-settings-autostart", "allow-settings-set-autostart", "allow-desktop-close-ready"
   ]
 }

@@ -1,3 +1,41 @@
 fn main() {
-    tauri_build::build()
+    let commands = &[
+        "get_app_paths",
+        "ensure_notes_folder",
+        "desktop_list_notes",
+        "desktop_read_note",
+        "desktop_save_note",
+        "desktop_move_to_trash",
+        "desktop_restore_note",
+        "desktop_delete_note",
+        "syncthing_status",
+        "syncthing_start",
+        "syncthing_stop",
+        "syncthing_proxy_request",
+        "syncthing_apply_folder_config",
+        "syncthing_confirm_folder_config",
+        "syncthing_pairing_info",
+        "syncthing_events",
+        "syncthing_preview_device_pairing",
+        "syncthing_confirm_device_pairing",
+        "open_notes_folder",
+        "open_syncthing_web",
+        "sticky_open",
+        "sticky_context",
+        "sticky_pin",
+        "sticky_dirty",
+        "sticky_main",
+        "sticky_settings",
+        "sticky_set_shortcut",
+        "sticky_begin_recording",
+        "sticky_end_recording",
+        "settings_autostart",
+        "settings_set_autostart",
+        "desktop_close_ready",
+    ];
+    tauri_build::try_build(
+        tauri_build::Attributes::new()
+            .app_manifest(tauri_build::AppManifest::new().commands(commands)),
+    )
+    .expect("failed to build Tauri permissions");
 }

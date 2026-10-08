@@ -59,12 +59,13 @@
             });
         },
 
-        async saveNote(id, suggestedId, content) {
+        async saveNote(id, suggestedId, content, expectedVersion) {
             return invokeDesktop('desktop_save_note', {
                 request: {
                     id: id || null,
                     suggestedId: suggestedId,
                     content: content,
+                    ...(expectedVersion === undefined ? {} : { expectedVersion }),
                 },
             });
         },
