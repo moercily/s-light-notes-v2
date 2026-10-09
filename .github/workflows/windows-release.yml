@@ -1,0 +1,129 @@
+name: Windows x64 release installer
+run-name: Windows x64 installer for ${{ inputs.tag }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build
+        required: true
+        default: '0.0.1'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Check out the release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Validate the existing release and version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($env:RELEASE_TAG -notmatch '^v?\d+\.\d+\.\d+$') {
+            throw 'Use an existing three-part version tag.'
+          }
+          $release = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json tagName,isDraft,targetCommitish | ConvertFrom-Json
+          if ($release.isDraft) { throw 'The release must already be published.' }
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($version -ne ($env:RELEASE_TAG -replace '^v', '')) {
+            throw 'Package version does not match the release tag.'
+          }
+          $commit = git rev-parse HEAD
+          Write-Output "Building $env:RELEASE_TAG from $commit (version $version)"
+
+      - name: Prepare Rust
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-pc-windows-msvc
+
+      - name: Install locked frontend dependencies and run tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          npm ci
+          npm test
+
+      - name: Build the Windows x64 NSIS installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          npm run tauri:build:windows -- --target x86_64-pc-windows-msvc --ci -- --locked
+          $binary = Resolve-Path 'src-tauri/target/x86_64-pc-windows-msvc/release/s-light-notes.exe'
+          $bytes = [System.IO.File]::ReadAllBytes($binary)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          if ([BitConverter]::ToUInt16($bytes, $peOffset + 4) -ne 0x8664) {
+            throw 'The application binary is not Windows x64.'
+          }
+          Get-ChildItem 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe' | Get-FileHash -Algorithm SHA256
+
+      - name: Run Rust unit tests on Windows
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          cargo test --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc --locked --lib
+
+      - name: Keep the verified installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-x64-installer
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the verified installer
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: windows-x64-installer
+          path: installer
+
+      - name: Attach the installer without changing release notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          shopt -s nullglob
+          installers=(installer/*-setup.exe)
+          test "${#installers[@]}" -eq 1
+          sha256sum "${installers[@]}"
+          gh release upload "$RELEASE_TAG" "${installers[@]}" --repo "$GITHUB_REPOSITORY"
