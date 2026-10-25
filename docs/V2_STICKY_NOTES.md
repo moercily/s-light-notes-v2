@@ -84,3 +84,11 @@ Not yet verified:
 
 The disposable sticky QA note is moved to the application's `.trash` after
 verification and can be restored. Original notes are retained.
+
+## 2026-10-25 reliability update
+
+Sticky windows now apply the same font, size and spacing preferences as the main
+editor. Close vetoes incomplete IME composition and failed saves. Markdown blocks
+retain source text while untouched, and reload ignores stale asynchronous reads.
+Physical cross-application keys, Windows/Linux runtime and real-login startup
+acceptance remain outstanding. See the current test-plan checkpoint.

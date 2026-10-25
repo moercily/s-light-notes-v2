@@ -18,10 +18,10 @@ jobs:
         include:
           - runner: macos-15
             target: aarch64-apple-darwin
-            bundles: dmg
+            bundles: app,dmg
           - runner: macos-15-intel
             target: x86_64-apple-darwin
-            bundles: dmg
+            bundles: app,dmg
           - runner: windows-2022
             target: x86_64-pc-windows-msvc
             bundles: nsis
@@ -60,6 +60,9 @@ jobs:
         run: npm run test:p2p
       - name: Package native application
         run: npm run tauri:build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --ci -- --locked
+      - name: Verify macOS bundle signature and architecture
+        if: runner.os == 'macOS'
+        run: node scripts/verify-macos-bundle.mjs "src-tauri/target/${{ matrix.target }}/release/bundle/macos/s-light notes.app"
       - name: Collect installers and checksums
         run: node scripts/collect-desktop-release.mjs src-tauri/target/${{ matrix.target }}/release/bundle release/${{ matrix.target }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

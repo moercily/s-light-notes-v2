@@ -41,3 +41,5 @@
 当前不启用自动更新。实现前需满足上述安装/升级门槛，并准备独立更新签名、可信更新清单与托管地址。更新前等待所有窗口保存成功，再停止应用管理的引擎；任何保存失败都取消更新。替换失败必须保留可启动旧版本，不重建身份，不修改笔记目录绑定。
 
 参考：[Tauri 平台前置依赖](https://v2.tauri.app/start/prerequisites/)、[GitHub 原生运行器](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
+
+Mac 开发包显式使用 ad-hoc 签名，主程序、内置引擎与应用资源一并封印。`node scripts/verify-macos-bundle.mjs <应用包路径>` 校验资源签名、版本和架构。它不能替代 Developer ID 签名与公证。配置依据：[Tauri 官方签名说明](https://github.com/tauri-apps/tauri-docs/blob/v2/src/content/docs/distribute/Sign/macos.mdx)。

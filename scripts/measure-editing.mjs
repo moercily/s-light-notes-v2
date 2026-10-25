@@ -1,0 +1,21 @@
+// Repeatable synthetic DOM workload, not a physical-device responsiveness claim.
+import { JSDOM } from 'jsdom';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
+const dom = new JSDOM('<ul id="note-list"></ul><div id="note-editor"></div>', { runScripts: 'outside-only', url: 'https://notes.test' });
+const w = dom.window;
+w.AppState = { currentNoteId: null, storageMode: 'idb', notes: [] };
+w.eval(readFileSync('app/js/utils.js', 'utf8'));
+w.eval(readFileSync('app/js/editor.js', 'utf8'));
+w.eval(readFileSync('app/js/sidebar.js', 'utf8'));
+const notes = Array.from({ length: 1000 }, (_, i) => ({ id: `note-${i}`, title: `中文笔记 ${i}`, content: `正文 ${i} searchable content`, updatedAt: i + 1, version: String(i) }));
+let start = performance.now(); w.renderNoteList(notes); const listMs = performance.now() - start;
+start = performance.now(); w.renderNoteList(notes); const unchangedMs = performance.now() - start;
+const source = '# 长笔记\n\n' + Array.from({ length: 1000 }, (_, i) => `第 ${i} 段：中文 **加粗** 和 [链接](https://example.com/item/${i})。\n\n`).join('');
+const editor = w.document.querySelector('#note-editor');
+start = performance.now(); w.setEditorMarkdown(editor, source); const loadMs = performance.now() - start;
+start = performance.now(); const roundtrip = w.htmlToMarkdown(editor); const saveMs = performance.now() - start;
+if (roundtrip !== source) throw new Error('Large note roundtrip lost content');
+const result = { environment: `Node ${process.version}, ${process.platform}/${process.arch}, jsdom (no layout or native IME)`, notes: 1000, longNoteBytes: Buffer.byteLength(source), listMs, unchangedMs, loadMs, saveMs };
+mkdirSync('release/qa', { recursive: true }); writeFileSync('release/qa/editing-performance.json', JSON.stringify(result, null, 2) + '\n');
+console.log(JSON.stringify(result, null, 2)); dom.window.close();

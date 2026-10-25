@@ -1,5 +1,28 @@
 # s-light notes v2 Test Plan
 
+## 最新执行记录 — 2026-10-25 / 0.1.0
+
+本节优先于后面的历史检查点；历史记录不代表本版已重新通过。
+
+| 验证范围 | 本次结果 |
+| --- | --- |
+| 前端/服务/编辑器回归 | 11 组通过，新增真实 DOM 的 Markdown 保真、URL、粘贴、撤销、IME 状态及移动保存失败测试 |
+| Rust | 38 项通过，含备份导入、目录版本及旧内容覆盖保护 |
+| Android Kotlin | arm64 与 x86-64 各 12 项单元测试通过，无失败 |
+| 本机实际双引擎 | 双向文件交换、离线新增、竞争修改冲突、重启身份及独立停止通过；仅本机 loopback，非两台桌面安装包 UI 验收 |
+| Mac arm64 | 0.1.0 app/DMG 构建；原生界面新建中文笔记、导入、编辑代码块、保存和导出通过；导入样本修改 42 为 43 后，Markdown 与预期逐字一致 |
+| Markdown 导出 | 原生文件夹选择、11 个文件导出及清单摘要校验通过。测试笔记移入回收站，原有笔记不改动 |
+| Android 发布包 | arm64、x86-64 签名 APK 和通用 AAB 构建；两个 APK 签名验证、AAB JAR 签名验证通过；最终包同签名覆盖重装和再次启动也通过（未以此替代数据迁移验收） |
+| Android 签名版首次运行 | 新建独立 `slight-release-qa` API 36 arm64 模拟器，全新安装成功，冷启动约 1.1 秒，无 AndroidRuntime 崩溃；非完整编辑/配对验收 |
+| 原生桌面 CI | 运行 [40187385980](https://github.com/moercily/s-light-notes-v2/actions/runs/40187385980) 四个平台全部通过（提交 94fa9ce）；首次 Mac arm64 测试暴露非阻塞套接字继承问题，已修复。后续资源签名加固的 CI 结果待记录 |
+
+可重复的模拟 DOM 负载：`node scripts/measure-editing.mjs`。本机 Node 24 / jsdom，1000 条笔记列表约 53 ms，未变化列表约 4 ms；约 79 KB、1000 段长笔记装载约 75 ms，未修改内容读回约 7 ms，文本完全一致。结果在忽略目录 `release/qa/editing-performance.json`。这是无布局的合成基准，不能证明真机滚动、输入法或低端手机性能。
+
+本版尚未通过：两台桌面安装包互相配对及同步 UI；Windows/Linux 安装后的便签和编辑交互；物理跨应用快捷键；重新登录后的开机启动；Android 签名版完整编辑/升级/同步真机验收；真机长时间耗电；x86-64 Android 运行；商店上传与桌面发行签名/公证。
+
+当前没有连接 Android 真机；宿主是 Apple Silicon；可用本机代码签名身份数量为 0。签名身份的机外备份需要指定安全介质，不能以另一个本机目录冒充完成。上述门槛未完成前不启用自动更新，也不把本次开发版本公开发布。
+
+
 ## Desktop Sticky Checkpoint — 2026-10-08
 
 All eight frontend suites and 34 Rust tests pass. macOS Apple Silicon release
@@ -312,3 +335,7 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - Syncthing-Fork is used only as an optional behavior/build reference; the Android APK must not depend on or launch it.
 - iOS keeps Möbius Sync or import/export as a fallback until the embedded engine is release-ready.
 - Mobile UI does not depend on desktop-only Tauri commands.
+
+### Mac 包资源签名补充
+
+额外对 DMG 内应用执行严格校验时，旧的隐式链接器签名未通过资源封印验证。已在 Tauri 配置显式使用 ad-hoc 签名 `-`，同时签名主程序、sidecar 与整个应用包；本机 `codesign --verify --deep --strict`、版本号以及两份可执行文件的 arm64 架构检查通过。CI 新增相同检查。此签名不代表 Apple Developer ID 或公证通过；本机无可用发行身份，正式发行签名仍为外部门槛。
