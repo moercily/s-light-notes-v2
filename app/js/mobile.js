@@ -732,6 +732,7 @@ async function onMobilePermanentlyDelete(id) {
 
 async function onMobileImport() {
     try {
+        if (AppState.isDirty) { await saveMobileCurrentNote(); if (AppState.isDirty) return; }
         AppState._showTrash = false;
         const count = await importNotes();
         await refreshMobileNotes();
@@ -745,6 +746,7 @@ async function onMobileImport() {
 
 async function onMobileExport() {
     try {
+        if (AppState.isDirty) { await saveMobileCurrentNote(); if (AppState.isDirty) return; }
         const count = await exportAllNotes();
         setMobileSaveStatus('已导出 ' + count + ' 条笔记');
     } catch (err) {
@@ -754,6 +756,7 @@ async function onMobileExport() {
 }
 
 function applyMobileFormat(format) {
+    if (AppState._currentConflict || AppState._showTrash || AppState._composing) return;
     const editor = $('#mobile-note-editor');
     editor.focus();
     const sel = window.getSelection();

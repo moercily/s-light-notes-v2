@@ -175,7 +175,8 @@ function htmlToMarkdown(editor) {
             const content = lines.join('\n');
             if (content || child.nodeName === 'BR' || child.nodeName === 'P') {
                 const spacing = original?.content.match(/\n+$/)?.[0] ?? '\n\n';
-                parts.push(content + spacing);
+                const prefix = original?.content.match(/^(?:[ \t]*\r?\n)+/)?.[0] || '';
+                parts.push(prefix + content + spacing);
             }
         }
     }

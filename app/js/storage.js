@@ -364,7 +364,7 @@ async function desktopListNotes() {
     const revision = window.desktopService.notesRevision ? await window.desktopService.notesRevision(inTrash) : null;
     const cached = desktopNoteCache.get(inTrash);
     if (revision && cached?.revision === revision && Date.now() - cached.checked < 30000) return cached.notes;
-    const notes = await window.desktopService.listNotes(AppState._showTrash);
+    const notes = await window.desktopService.listNotes(inTrash);
     const result = notes.map(normalizeDesktopNote);
     desktopNoteCache.set(inTrash, { revision, notes: result, checked: Date.now() });
     return result;

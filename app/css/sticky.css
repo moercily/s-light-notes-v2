@@ -8,7 +8,7 @@ body { display: flex; flex-direction: column; background: var(--bg-primary); bor
 #sticky-pin svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
 #note-title-display { flex: 1; min-width: 0; font-size: 13px; padding: 10px 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: grab; }
 #sticky-body { flex: 1; min-height: 0; overflow: auto; }
-#note-editor { min-height: 100%; max-width: none; margin: 0; padding: 18px; font-size: 15px; line-height: 1.7; overflow-wrap: anywhere; }
+#note-editor { min-height: 100%; max-width: none; margin: 0; padding: 18px; font-size: var(--editor-size, 16px); line-height: var(--editor-spacing, 1.8); overflow-wrap: anywhere; }
 #sticky-footer { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 11px; color: var(--text-secondary); border-top: 1px solid var(--border-color); }
 #status-save { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 #sticky-footer button, #sticky-readonly button { flex-shrink: 0; color: var(--accent); border: 0; background: none; cursor: pointer; padding: 4px; font-size: 12px; }
