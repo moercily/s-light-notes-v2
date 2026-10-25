@@ -11,10 +11,11 @@
 | Android Kotlin | arm64 与 x86-64 各 12 项单元测试通过，无失败 |
 | 本机实际双引擎 | 双向文件交换、离线新增、竞争修改冲突、重启身份及独立停止通过；仅本机 loopback，非两台桌面安装包 UI 验收 |
 | Mac arm64 | 0.1.0 app/DMG 构建；原生界面新建中文笔记、导入、编辑代码块、保存和导出通过；导入样本修改 42 为 43 后，Markdown 与预期逐字一致 |
-| Markdown 导出 | 原生文件夹选择、11 个文件导出及清单摘要校验通过。测试笔记移入回收站，原有笔记不改动 |
+| 同步停止时编辑 | 停止已确认属于应用包的引擎进程，确认 8385 不可连接；本地新建中文笔记、保存、文件回读和切换后重开均通过；未停止另一个 8384 服务 |
+| Markdown 导出 | 原生文件夹选择、11 个文件导出及清单摘要校验通过。测试笔记移入回收站；与验收前导出摘要比较，原有 10 个文件内容哈希全部不变；含原有笔记的临时导出副本已清理 |
 | Android 发布包 | arm64、x86-64 签名 APK 和通用 AAB 构建；两个 APK 签名验证、AAB JAR 签名验证通过；最终包同签名覆盖重装和再次启动也通过（未以此替代数据迁移验收） |
 | Android 签名版首次运行 | 新建独立 `slight-release-qa` API 36 arm64 模拟器，全新安装成功，冷启动约 1.1 秒，无 AndroidRuntime 崩溃；非完整编辑/配对验收 |
-| 原生桌面 CI | 运行 [40187385980](https://github.com/moercily/s-light-notes-v2/actions/runs/40187385980) 四个平台全部通过（提交 94fa9ce）；首次 Mac arm64 测试暴露非阻塞套接字继承问题，已修复。后续资源签名加固的 CI 结果待记录 |
+| 原生桌面 CI | 最终运行 [40188409227](https://github.com/moercily/s-light-notes-v2/actions/runs/40188409227) 四个平台全部成功，提交 `32fac85`；每个平台均通过 11 组前端测试、38 项 Rust 测试、真实双引擎测试及安装包构建；两个 Mac 目标另通过严格资源签名、版本及主程序/引擎架构校验 |
 
 可重复的模拟 DOM 负载：`node scripts/measure-editing.mjs`。本机 Node 24 / jsdom，1000 条笔记列表约 53 ms，未变化列表约 4 ms；约 79 KB、1000 段长笔记装载约 75 ms，未修改内容读回约 7 ms，文本完全一致。结果在忽略目录 `release/qa/editing-performance.json`。这是无布局的合成基准，不能证明真机滚动、输入法或低端手机性能。
 
@@ -338,4 +339,12 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 
 ### Mac 包资源签名补充
 
-额外对 DMG 内应用执行严格校验时，旧的隐式链接器签名未通过资源封印验证。已在 Tauri 配置显式使用 ad-hoc 签名 `-`，同时签名主程序、sidecar 与整个应用包；本机 `codesign --verify --deep --strict`、版本号以及两份可执行文件的 arm64 架构检查通过。CI 新增相同检查。此签名不代表 Apple Developer ID 或公证通过；本机无可用发行身份，正式发行签名仍为外部门槛。
+额外对 DMG 内应用执行严格校验时，旧的隐式链接器签名未通过资源封印验证。已在 Tauri 配置显式使用 ad-hoc 签名 `-`，同时签名主程序、sidecar 与整个应用包；本机 `codesign --verify --deep --strict`、版本号以及两份可执行文件的 arm64 架构检查通过。两个原生 Mac CI 目标均通过相同检查；签名后的本机应用也再次启动并完成空便签打开/关闭测试。此签名不代表 Apple Developer ID 或公证通过；本机无可用发行身份，正式发行签名仍为外部门槛。
+
+### 最终产物与清理
+
+- CI 提供两个 Mac DMG、Windows x64 NSIS EXE、Linux x64 deb/AppImage，每个平台均有 SHA256SUMS；原生构建成功不等于安装后人工验收通过。
+- 最终 Android arm64/x86-64 APK 和通用 AAB 已收集到 `release/android/0.1.0/` 并验证签名。最终 arm64 包在独立 API 36 模拟器同签名重装、冷启动通过，无 AndroidRuntime 崩溃。
+- 临时 Android 模拟器 `slight-release-qa` 已关闭并删除；原有 AVD 保留。
+- 所有临时真实笔记均移入回收站，原有 10 个笔记内容未改动；含原笔记内容的临时导出目录已删除。
+- 最终代码之后的提交只更新验证记录；不修改已通过 CI 的产品代码，也不创建新的公开 GitHub Release。
