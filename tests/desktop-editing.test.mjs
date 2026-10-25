@@ -119,3 +119,12 @@ function fixture(saveImpl) {
     assert.equal(f.state.isDirty, true);
 }
 console.log('desktop multi-window editing tests passed');
+
+// Closing during IME composition must veto close and preserve the pending candidate.
+{
+    const f = fixture(async () => { throw new Error('must not write'); });
+    await f.api.init(); f.api.ready(); f.state._composing = true;
+    await f.api.flush();
+    assert.equal(f.state.isDirty, true); assert.equal(f.editor.contentEditable, 'true');
+    assert.equal(f.calls.at(-1).success, false);
+}

@@ -2440,6 +2440,23 @@ mod tests {
     use std::thread::{self, JoinHandle};
 
     #[test]
+    fn directory_revision_tracks_edits_moves_and_restore() {
+        let directory = temporary_notes_dir("revision");
+        let empty = notes_revision(&directory, false).unwrap();
+        let first = save_note_in_dir(&directory, None, "note", "first").unwrap();
+        let created = notes_revision(&directory, false).unwrap();
+        assert_ne!(created, empty);
+        assert_eq!(created, notes_revision(&directory, false).unwrap());
+        save_note_in_dir(&directory, Some(&first.id), "note", "longer content").unwrap();
+        assert_ne!(created, notes_revision(&directory, false).unwrap());
+        move_note_to_trash(&directory, &first.id).unwrap();
+        assert_eq!(empty, notes_revision(&directory, false).unwrap());
+        restore_note_from_trash(&directory, &first.id).unwrap();
+        assert_ne!(empty, notes_revision(&directory, false).unwrap());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn stale_windows_and_deleted_notes_cannot_overwrite() {
         let dir = temporary_notes_dir("sticky-versions");
         let first = save_note_in_dir(&dir, None, "note", "first").unwrap();
@@ -2527,6 +2544,8 @@ mod tests {
     }
 
     fn read_http_request(stream: &mut TcpStream) -> CapturedHttpRequest {
+        // macOS accepts may inherit the nonblocking listener flag. Read complete requests.
+        stream.set_nonblocking(false).unwrap();
         stream
             .set_read_timeout(Some(Duration::from_secs(2)))
             .unwrap();

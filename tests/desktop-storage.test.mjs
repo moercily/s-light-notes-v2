@@ -92,3 +92,17 @@ async function testDesktopModeInitializesAndRoutesStorage() {
 await testDesktopModeInitializesAndRoutesStorage();
 
 console.log('desktop-storage tests passed');
+
+// Background refresh checks cheap metadata first and invalidates on a directory revision change.
+{
+  let revision = 'one', reads = 0;
+  const { storage } = await loadStorage({
+    isAvailable: () => true,
+    ensureNotesFolder: async () => ({ notesDir: '/tmp/notes' }),
+    notesRevision: async () => revision,
+    listNotes: async () => { reads++; return [{ id: 'n', content: 'body', updatedAt: 1, version: revision }]; },
+  });
+  await storage.initStorage();
+  await storage.listNotes(); await storage.listNotes(); assert.equal(reads, 1);
+  revision = 'two'; await storage.listNotes(); assert.equal(reads, 2);
+}
