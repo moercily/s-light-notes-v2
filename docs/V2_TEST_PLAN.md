@@ -349,3 +349,9 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 - 临时 Android 模拟器 `slight-release-qa` 已关闭并删除；原有 AVD 保留。
 - 所有临时真实笔记均移入回收站，原有 10 个笔记内容未改动；含原笔记内容的临时导出目录已删除。
 - 最终代码之后的提交只更新验证记录；不修改已通过 CI 的产品代码，也不创建新的公开 GitHub Release。
+
+### Windows 交互验收的补充尝试
+
+恢复了本机既有 `Win10` 虚拟机，确认是 Windows 10 19044 / AMD64，已有 `0.0.1` 安装记录及设备证书。本次尝试未记为升级或交互验收通过：Guest Tools 无法读取本次只读安装包共享，随后界面控制工具返回“Mac is locked and automatic unlock could not unlock it”，必须由用户手动解锁才能继续界面检查。
+
+已取消本次命令客户端，关闭仅绑定 VM 网络接口的安装包传输服务，撤销只为本次测试创建的 `slight-notes-qa` 共享，并确认虚拟机恢复为原来的 `suspended` 状态。原有共享保留。Windows 的升级数据保留、编辑及便签人工验收仍待完成；不能用原生 CI 成功替代这些检查。
