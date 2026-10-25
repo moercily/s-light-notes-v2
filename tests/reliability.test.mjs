@@ -50,6 +50,15 @@ function mobileFixture() {
     dom.window.close();
 }
 {
+    const { dom, w, editor } = mobileFixture();
+    let writes = 0; w.saveNote = async () => { writes++; };
+    w.setEditorMarkdown(editor, '');
+    await w.saveMobileCurrentNote();
+    assert.equal(writes, 0); assert.equal(w.state.isDirty, false);
+    await w.onMobileNewNote(); assert.equal(w.state.currentNoteId, null);
+    dom.window.close();
+}
+{
     const dom = new JSDOM('<div id="prefs"></div>', { url: 'https://notes.test', runScripts: 'outside-only' });
     const w = dom.window;
     w.localStorage.setItem('s-light-editor-appearance', '{bad json');

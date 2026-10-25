@@ -614,7 +614,7 @@ async function saveMobileSnapshot() {
     if (AppState._composing || AppState._currentConflict || AppState._showTrash || !AppState.isDirty) return null;
     const session = AppState._editSession;
     const content = getMobileEditorContent();
-    if (!content.trim() && !AppState.currentNoteId) return null;
+    if (!content.trim() && !AppState.currentNoteId) { AppState.isDirty = false; return null; }
 
     setMobileSaveStatus('保存中...');
     try {
