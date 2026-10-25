@@ -4,7 +4,7 @@
    ============================================ */
 
 const CACHE_PREFIX = 's-light-notes-v2-';
-const CACHE_NAME = CACHE_PREFIX + '0.0.1-settings-1';
+const CACHE_NAME = CACHE_PREFIX + '0.1.0-reliability-1';
 
 // 需要缓存的静态资源
 const STATIC_ASSETS = [
@@ -17,6 +17,7 @@ const STATIC_ASSETS = [
     './css/mobile.css',
     './css/settings.css',
     './js/utils.js',
+    './js/appearance.js',
     './js/app-info.js',
     './js/desktop-editing.js',
     './js/desktop-sticky-ui.js',

@@ -172,6 +172,7 @@ function bindEvents() {
 
 function bindKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
+        if (e.isComposing || AppState._composing || e.keyCode === 229) return;
         if (e.altKey) return; // Global sticky shortcuts must not also trigger editor commands.
         const isCtrl = e.ctrlKey || e.metaKey; // Mac 上 metaKey = Cmd
 
@@ -203,7 +204,7 @@ function bindKeyboardShortcuts() {
         if (isCtrl && !e.shiftKey && e.key === 'z') {
             e.preventDefault();
             const editor = $('#note-editor');
-            if (editor && !AppState._showTrash) {
+            if (editor && !AppState._showTrash && !AppState._currentNoteReadOnly) {
                 undo(editor);
             }
         }
@@ -212,7 +213,7 @@ function bindKeyboardShortcuts() {
         if (isCtrl && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
             e.preventDefault();
             const editor = $('#note-editor');
-            if (editor && !AppState._showTrash) {
+            if (editor && !AppState._showTrash && !AppState._currentNoteReadOnly) {
                 redo(editor);
             }
         }
@@ -264,8 +265,7 @@ async function onConflictKeepCopy() {
     if (!note) return;
 
     try {
-        const title = note.title || note.id;
-        const content = '# ' + title + '（冲突副本）\n\n' + stripLeadingTitle(note.content);
+        const content = note.content;
         const result = await saveNote(null, content);
         AppState.currentNoteId = result.id;
         AppState._currentNoteReadOnly = false;

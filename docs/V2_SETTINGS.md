@@ -100,3 +100,11 @@ The arm64 debug APK builds with version name `0.0.1` and install code `2000001`.
 No reboot/login, Windows/Linux native runtime, or Android phone acceptance was
 performed in this checkpoint. Existing physical-key cross-application shortcut
 verification remains pending; app-targeted recorder testing does not prove it.
+
+## 2026-10-25 development update
+
+Development version is now `0.1.0`, Android version code `2000002`. General also
+mounts an editor appearance item through the existing registry. Font, font size
+and line spacing are local preferences shared with sticky and mobile editors;
+unsupported/corrupt stored values fall back to defaults. Android still uses its
+separate settings screen. The earlier `0.0.1` sections are historical checkpoints.

@@ -23,6 +23,12 @@ const AppState = {
 
 async function initMobileApp() {
     initMobileTheme();
+    const preferences = document.createElement('section');
+    preferences.className = 'mobile-appearance';
+    const heading = document.createElement('h2'); heading.textContent = '编辑器';
+    preferences.append(heading);
+    $('#mobile-settings-note').after(preferences);
+    Appearance.mount(preferences);
     bindMobileEvents();
     initMobileViewport();
     initMobileNavigation();
@@ -54,7 +60,24 @@ function bindMobileEvents() {
         AppState.searchQuery = e.target.value;
         renderMobileNotes();
     });
-    $('#mobile-note-editor').addEventListener('input', onMobileEditorInput);
+    const editor = $('#mobile-note-editor');
+    editor.addEventListener('input', onMobileEditorInput);
+    initEditorComposition(editor, onMobileEditorInput);
+    editor.addEventListener('paste', event => handleImagePaste(event, editor));
+    editor.addEventListener('drop', event => handleImageDrop(event, editor));
+    $('#mobile-save-copy').addEventListener('click', async () => {
+        try {
+            const session = AppState._editSession;
+            const content = getMobileEditorContent();
+            const result = await saveNote(null, content);
+            if (session !== AppState._editSession) return;
+            AppState.currentNoteId = result.id; AppState._version = result.version;
+            AppState.isDirty = content !== getMobileEditorContent();
+            $('#mobile-save-copy').hidden = true;
+            setMobileSaveStatus('已保留副本');
+            await refreshMobileNotes();
+        } catch (error) { setMobileSaveStatus('保留副本失败，内容仍保留'); }
+    });
     $('#mobile-delete-note').addEventListener('click', onMobileDeleteCurrent);
     $('#mobile-import').addEventListener('click', onMobileImport);
     $('#mobile-export').addEventListener('click', onMobileExport);
@@ -408,6 +431,10 @@ function initMobileNavigation() {
         const name = event.state && event.state.mobileView ? event.state.mobileView : 'list';
         if (AppState._view === 'editor' && AppState.isDirty) {
             await saveMobileCurrentNote();
+            if (AppState.isDirty) {
+                history.pushState({ mobileView: 'editor' }, '', location.href);
+                return;
+            }
         }
         activateMobileView(name);
         if (name === 'list') await refreshMobileNotes();
@@ -499,36 +526,52 @@ function renderMobileNotes() {
     });
 }
 
+let mobileNavigation = 0;
+let mobileSaveQueue = Promise.resolve();
 async function openMobileNote(id) {
+    const navigation = ++mobileNavigation;
     if (AppState.isDirty) await saveMobileCurrentNote();
+    if (AppState.isDirty) return;
 
+    if (AppState.isDirty) return;
     const note = await readNote(id);
+    if (navigation !== mobileNavigation || AppState.isDirty) return;
     if (!note) {
         await refreshMobileNotes();
         return;
     }
 
+    AppState._editSession = (AppState._editSession || 0) + 1;
+    AppState._version = note.version;
+    AppState._currentNoteReadOnly = !!note.isConflict;
     AppState.currentNoteId = note.id;
     AppState._currentConflict = note.isConflict ? note : null;
     AppState.isDirty = false;
-    $('#mobile-note-editor').innerHTML = renderMarkdown(note.content || '');
+    setEditorMarkdown($('#mobile-note-editor'), note.content || '');
     $('#mobile-note-editor').contentEditable = note.isConflict ? 'false' : 'true';
     $('#mobile-conflict-actions').hidden = !note.isConflict;
     $('#mobile-format-bar').hidden = note.isConflict;
     $('#mobile-delete-note').hidden = note.isConflict;
     $('#mobile-note-title').textContent = (note.title || '未命名') + (note.isConflict ? ' · 冲突副本' : '');
     setMobileSaveStatus('已加载');
+    $('#mobile-save-copy').hidden = true;
     showMobileView('editor');
 }
 
 async function onMobileNewNote() {
+    const navigation = ++mobileNavigation;
     if (AppState.isDirty) await saveMobileCurrentNote();
+    if (AppState.isDirty) return;
 
+    if (navigation !== mobileNavigation || AppState.isDirty) return;
+    AppState._editSession = (AppState._editSession || 0) + 1;
+    AppState._version = null;
+    AppState._currentNoteReadOnly = false;
     AppState._showTrash = false;
     AppState.currentNoteId = null;
     AppState._currentConflict = null;
     AppState.isDirty = false;
-    $('#mobile-note-editor').innerHTML = '';
+    setEditorMarkdown($('#mobile-note-editor'), '');
     $('#mobile-note-editor').contentEditable = 'true';
     $('#mobile-conflict-actions').hidden = true;
     $('#mobile-format-bar').hidden = false;
@@ -540,40 +583,54 @@ async function onMobileNewNote() {
 }
 
 async function onMobileBackToList() {
+    ++mobileNavigation;
     if (AppState.isDirty) await saveMobileCurrentNote();
+    if (AppState.isDirty) return;
     await refreshMobileNotes();
     navigateMobileBack();
 }
 
 function onMobileEditorInput() {
+    if (AppState._currentConflict || AppState._showTrash) return;
     AppState.isDirty = true;
     setMobileSaveStatus('未保存...');
-    autoSaveMobileNote();
+    if (!AppState._composing) autoSaveMobileNote();
 }
 
 const autoSaveMobileNote = debounce(async () => {
-    if (!AppState.isDirty) return;
+    if (!AppState.isDirty || AppState._composing) return;
     const content = getMobileEditorContent();
-    if (!content.trim()) return;
+    if (!content.trim() && !AppState.currentNoteId) return;
     await saveMobileCurrentNote();
 }, 600);
 
-async function saveMobileCurrentNote() {
+function saveMobileCurrentNote() {
+    const task = mobileSaveQueue.catch(() => {}).then(saveMobileSnapshot);
+    mobileSaveQueue = task;
+    return task;
+}
+
+async function saveMobileSnapshot() {
+    if (AppState._composing || AppState._currentConflict || AppState._showTrash || !AppState.isDirty) return null;
+    const session = AppState._editSession;
     const content = getMobileEditorContent();
     if (!content.trim() && !AppState.currentNoteId) return null;
 
     setMobileSaveStatus('保存中...');
     try {
         const result = await saveNote(AppState.currentNoteId, content);
+        if (session !== AppState._editSession) return result;
         AppState.currentNoteId = result.id;
-        AppState.isDirty = false;
+        AppState._version = result.version;
+        AppState.isDirty = getMobileEditorContent() !== content;
         $('#mobile-note-title').textContent = result.title || '未命名';
-        setMobileSaveStatus('已保存 ' + formatDate(result.updatedAt));
+        setMobileSaveStatus(AppState.isDirty ? '未保存...' : '已保存 ' + formatDate(result.updatedAt));
         await refreshMobileNotes();
         return result;
     } catch (err) {
         console.error('移动端保存失败:', err);
-        setMobileSaveStatus('保存失败');
+        setMobileSaveStatus(String(err).includes('NOTE_CONFLICT:') ? '原笔记已更新，请保留副本后重新打开。' : '保存失败，内容仍保留');
+        $('#mobile-save-copy').hidden = false;
         return null;
     }
 }
@@ -640,7 +697,9 @@ async function onMobileConflictTrash() {
 }
 
 async function onMobileToggleTrash() {
+    ++mobileNavigation;
     if (AppState.isDirty) await saveMobileCurrentNote();
+    if (AppState.isDirty) return;
     AppState._showTrash = !AppState._showTrash;
     AppState.currentNoteId = null;
     await refreshMobileNotes();

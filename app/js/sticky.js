@@ -56,6 +56,7 @@ async function initSticky() {
     });
     initFormatToolbar();
     document.addEventListener('keydown', event => {
+        if (event.isComposing || AppState._composing || event.keyCode === 229) return;
         if (!(event.ctrlKey || event.metaKey)) return;
         const key = event.key.toLowerCase();
         if (key === 's') { event.preventDefault(); action(() => saveCurrentNote())(); }

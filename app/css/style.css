@@ -1097,3 +1097,11 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: #aaa;
 }
+
+#note-editor, #mobile-note-editor {
+    font-family: var(--editor-font, var(--font-sans));
+    font-size: var(--editor-size, 16px);
+    line-height: var(--editor-spacing, 1.8);
+}
+.editor-preference { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; }
+.editor-preference select { min-height: 44px; max-width: 60%; padding: 8px; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; }

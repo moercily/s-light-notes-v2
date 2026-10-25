@@ -125,6 +125,9 @@ function createNoteItem(note, isActive) {
     return li;
 }
 
+let noteNavigation = 0;
+let listRefresh = 0;
+
 // ========== 笔记选择 ==========
 
 /**
@@ -132,6 +135,7 @@ function createNoteItem(note, isActive) {
  * @param {string} id
  */
 async function onNoteSelected(id) {
+    const navigation = ++noteNavigation;
     if (id === AppState.currentNoteId) return;
 
     // 如果当前有未保存内容，先保存（新建笔记也会在这里创建）
@@ -142,6 +146,7 @@ async function onNoteSelected(id) {
 
     // 加载新笔记（回收站模式也从正常路径读取）
     const note = await readNote(id);
+    if (navigation !== noteNavigation || AppState.isDirty) return;
     if (!note) {
         // 笔记可能已被删除
         await refreshNoteList();
@@ -170,12 +175,14 @@ async function onNoteSelected(id) {
  * 新建笔记
  */
 async function onNewNote() {
+    const navigation = ++noteNavigation;
     // 如有未保存内容，先保存
     if (AppState.isDirty && !AppState._showTrash) {
         await saveCurrentNote();
         if (AppState.isDirty) return;
     }
 
+    if (navigation !== noteNavigation) return;
     // 清空编辑器
     clearEditor();
     AppState.currentNoteId = null;
@@ -278,6 +285,7 @@ const handleSearch = debounce(async (query) => {
     AppState.searchQuery = query;
     AppState._showConflictsOnly = false;
     const notes = await searchNotes(query);
+    if (query !== AppState.searchQuery) return;
     renderNoteList(notes, AppState.currentNoteId);
 }, 300);
 
@@ -317,6 +325,7 @@ async function onOpenFolder() {
 
 async function onExportAll() {
     try {
+        if (AppState.isDirty) { await saveCurrentNote(); if (AppState.isDirty) return; }
         const count = await exportAllNotes();
         updateStatusBarText('save', '已导出 ' + count + ' 条笔记');
     } catch (err) {
@@ -345,8 +354,14 @@ async function onImportNotes() {
  */
 async function refreshNoteList() {
     try {
-        AppState.notes = await listNotes();
-        const notes = AppState._showConflictsOnly ? AppState.notes.filter(note => note.isConflict) : AppState.notes;
+        const request = ++listRefresh;
+        const inTrash = AppState._showTrash;
+        const result = await listNotes();
+        if (request !== listRefresh || inTrash !== AppState._showTrash) return;
+        AppState.notes = result;
+        const query = (AppState.searchQuery || '').trim().toLowerCase();
+        const notes = AppState.notes.filter(note => (!AppState._showConflictsOnly || note.isConflict) &&
+            (!query || note.title.toLowerCase().includes(query) || note.content.toLowerCase().includes(query)));
         renderNoteList(notes);
         updateTrashModeUI();
     } catch (err) {
@@ -376,7 +391,7 @@ function updateStorageUI() {
         $('#btn-open-folder').style.display = 'block';
         $('#btn-open-folder').textContent = '📂 打开笔记目录';
         $('#btn-open-folder').title = '在系统文件管理器中打开默认笔记目录';
-        $$('.btn-idb-only').forEach(btn => btn.style.display = 'none');
+        $$('.btn-idb-only').forEach(btn => btn.style.display = 'block');
         const path = AppState.desktopPaths && AppState.desktopPaths.notesDir;
         updateStatusBarText('storage', path ? '存储：' + path : '存储：桌面默认目录');
     } else if (AppState.storageMode === 'fsa') {

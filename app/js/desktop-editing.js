@@ -17,6 +17,7 @@
 
     async function saveSnapshot() {
         if (readOnly()) return;
+        if (AppState._composing) throw new Error('请完成中文输入后再保存或关闭。');
         const content = getEditorContent();
         const id = AppState.currentNoteId;
         if (!id && !content.trim()) { AppState.isDirty = false; return; }
@@ -131,7 +132,11 @@
 
     async function reload() {
         if (saving || closing) return;
-        const note = await readNote(AppState.currentNoteId);
+        const id = AppState.currentNoteId;
+        const session = AppState._editSession;
+        const content = getEditorContent();
+        const note = await readNote(id);
+        if (session !== AppState._editSession || id !== AppState.currentNoteId || content !== getEditorContent()) return;
         if (!note) throw new Error('原笔记已删除或移动，请另存副本。');
         loadNoteToEditor(note);
         $('#conflict-dialog')?.classList.add('hidden');

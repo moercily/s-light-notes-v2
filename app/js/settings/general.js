@@ -5,3 +5,8 @@ Settings.addItem('general', {
     available: SettingsService.desktop, unsupported: '此选项仅支持桌面应用。',
     read: SettingsService.autostart, write: SettingsService.setAutostart,
 });
+
+Settings.addItem('general', {
+    id: 'settings-editor-appearance', group: 'editor', groupTitle: '编辑器',
+    mount: Appearance.mount,
+});

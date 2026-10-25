@@ -35,6 +35,10 @@
             return !!getInvoke();
         },
 
+        async exportNotes() { return invokeDesktop('desktop_export_notes'); },
+        async importNotes() { return invokeDesktop('desktop_import_notes'); },
+        async openExternal(url) { return invokeDesktop('desktop_open_external', { url }); },
+
         async getAppPaths() {
             return invokeDesktop('get_app_paths');
         },
@@ -46,6 +50,8 @@
         async openNotesFolder() {
             return invokeDesktop('open_notes_folder');
         },
+
+        async notesRevision(inTrash) { return invokeDesktop('desktop_notes_revision', { request: { inTrash: !!inTrash } }); },
 
         async listNotes(inTrash) {
             return invokeDesktop('desktop_list_notes', {

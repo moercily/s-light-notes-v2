@@ -15,8 +15,7 @@ function loadNoteToEditor(note) {
     AppState._version = note.version;
 
     // 渲染 markdown 为 HTML 并注入
-    const html = renderMarkdown(note.content || '');
-    editor.innerHTML = html;
+    setEditorMarkdown(editor, note.content || '');
 
     // 清空撤销栈并保存初始快照
     clearUndoStack();
@@ -51,7 +50,7 @@ function clearEditor() {
     AppState._editSession = (AppState._editSession || 0) + 1;
     AppState._version = null;
     const editor = $('#note-editor');
-    if (editor) editor.innerHTML = '';
+    if (editor) setEditorMarkdown(editor, '');
     clearUndoStack();
     updateEditorToolbar(null);
     if (typeof updateConflictBanner === 'function') {
@@ -145,7 +144,7 @@ function onEditorInput() {
     const content = getEditorContent();
     updateStatusBarText('stats', '字数：' + countWords(content));
 
-    if (content.trim() || AppState.currentNoteId) autoSave();
+    if (!AppState._composing && (content.trim() || AppState.currentNoteId)) autoSave();
 }
 
 // ====================================================
@@ -159,20 +158,28 @@ function onEditorInput() {
  * @returns {string}
  */
 function htmlToMarkdown(editor) {
-    // 规范化 DOM（合并相邻文本节点、清理空标签）
-    editor.normalize();
-
-    const lines = [];
-    // 遍历 contenteditable 的直接子节点（块级元素）
+    const source = editorSources.get(editor);
+    // Preserve untouched blocks byte-for-byte, including unsupported Markdown and blank lines.
+    if (source && editor.innerHTML === source.html) return source.content;
+    const parts = [];
+    let blockIndex = 0;
     for (const child of editor.childNodes) {
-        processBlockNode(child, lines);
+        const original = blockSources.get(child) || (child.nodeType === Node.ELEMENT_NODE ? source?.blocks[blockIndex] : null);
+        if (child.nodeType === Node.ELEMENT_NODE) blockIndex++;
+        if (original && child.outerHTML === original.html) {
+            parts.push(original.content);
+        } else {
+            const lines = [];
+            processBlockNode(child, lines);
+            while (lines.at(-1) === '') lines.pop();
+            const content = lines.join('\n');
+            if (content || child.nodeName === 'BR' || child.nodeName === 'P') {
+                const spacing = original?.content.match(/\n+$/)?.[0] ?? '\n\n';
+                parts.push(content + spacing);
+            }
+        }
     }
-
-    // 清理首尾空行
-    while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
-    while (lines.length > 0 && lines[0] === '') lines.shift();
-
-    return lines.join('\n');
+    return parts.join('').replace(/\n+$/, source?.content.match(/\n*$/)?.[0] || '');
 }
 
 /**
@@ -219,10 +226,12 @@ function processBlockNode(node, lines) {
         case 'pre': {
             const codeEl = node.querySelector('code');
             const code = codeEl ? codeEl.textContent : node.textContent;
-            const lang = '';
-            lines.push('```' + lang);
+            const lang = codeEl?.dataset.language || '';
+            const runs = code.match(/`+/g) || [];
+            const fence = '`'.repeat(Math.max(3, ...runs.map(run => run.length + 1)));
+            lines.push(fence + lang);
             lines.push(code.replace(/\n$/, ''));
-            lines.push('```');
+            lines.push(fence);
             lines.push('');
             break;
         }
@@ -256,19 +265,19 @@ function processBlockNode(node, lines) {
  */
 function processListItems(listEl, lines, indentLevel, isOrdered) {
     const indent = '  '.repeat(indentLevel);
-    let idx = 1;
+    let idx = Number(listEl.getAttribute('start')) || 1;
 
     for (const li of listEl.children) {
         if (li.tagName && li.tagName.toLowerCase() === 'li') {
             // 提取 li 的直接文本（排除嵌套列表）
             let liText = '';
-            let nestedList = null;
+            const nestedLists = [];
 
             for (const cn of li.childNodes) {
                 if (cn.nodeType === Node.ELEMENT_NODE) {
                     const cnTag = cn.tagName ? cn.tagName.toLowerCase() : '';
                     if (cnTag === 'ul' || cnTag === 'ol') {
-                        nestedList = cn;
+                        nestedLists.push(cn);
                     } else {
                         liText += getInlineMarkdownFromNode(cn);
                     }
@@ -282,7 +291,7 @@ function processListItems(listEl, lines, indentLevel, isOrdered) {
             idx++;
 
             // 递归处理嵌套列表
-            if (nestedList) {
+            for (const nestedList of nestedLists) {
                 const nestedOrdered = nestedList.tagName.toLowerCase() === 'ol';
                 processListItems(nestedList, lines, indentLevel + 1, nestedOrdered);
             }
@@ -303,7 +312,7 @@ function getInlineMarkdown(element) {
 
 function getInlineMarkdownFromNode(node) {
     if (node.nodeType === Node.TEXT_NODE) {
-        return node.textContent || '';
+        return (node.textContent || '').replace(/([\\`*\[\]])/g, '\\$1');
     }
 
     if (node.nodeType !== Node.ELEMENT_NODE) return '';
@@ -315,10 +324,15 @@ function getInlineMarkdownFromNode(node) {
             return '**' + getInlineMarkdown(node) + '**';
         case 'em': case 'i':
             return '*' + getInlineMarkdown(node) + '*';
-        case 'code':
-            return '`' + (node.textContent || '') + '`';
+        case 'code': {
+            const text = node.textContent || '';
+            const ticks = '`'.repeat(Math.max(1, ...(text.match(/`+/g) || []).map(run => run.length + 1)));
+            const padding = text.startsWith('`') || text.endsWith('`') ? ' ' : '';
+            return ticks + padding + text + padding + ticks;
+        }
         case 'a': {
-            const href = node.getAttribute('href') || '';
+            const href = safeEditorUrl(node.getAttribute('href') || '', false);
+            if (!href) return getInlineMarkdown(node);
             return '[' + getInlineMarkdown(node) + '](' + href + ')';
         }
         case 'br':
@@ -328,7 +342,8 @@ function getInlineMarkdownFromNode(node) {
         case 'mark':
             return getInlineMarkdown(node);
         case 'img': {
-            const src = node.getAttribute('src') || '';
+            const src = safeEditorUrl(node.getAttribute('src') || '', true);
+            if (!src) return node.getAttribute('alt') || '';
             const alt = node.getAttribute('alt') || '';
             return '![' + alt + '](' + src + ')';
         }
@@ -348,186 +363,151 @@ function getInlineMarkdownFromNode(node) {
 //  Markdown → HTML 渲染器
 // ====================================================
 
+const editorSources = new WeakMap();
+const blockSources = new WeakMap();
+
+function setEditorMarkdown(editor, content) {
+    const blocks = markdownBlocks(content);
+    editor.innerHTML = blocks.map(block => block.html).join('');
+    [...editor.children].forEach((node, index) => {
+        blockSources.set(node, { html: node.outerHTML, content: blocks[index].source });
+    });
+    editorSources.set(editor, { html: editor.innerHTML, content, blocks: [...editor.children].map(node => blockSources.get(node)) });
+}
+
 function renderMarkdown(text) {
-    if (!text) return '';
+    return markdownBlocks(text || '').map(block => block.html).join('');
+}
 
-    // 提取代码块
-    const codeBlocks = [];
-    let processed = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
-        const idx = codeBlocks.length;
-        const escapedCode = escapeHtml(code.replace(/\n$/, ''));
-        const langLabel = lang ? '<span class="code-lang">' + escapeHtml(lang) + '</span>' : '';
-        codeBlocks.push('<pre class="code-block">' + langLabel + '<code>' + escapedCode + '</code></pre>');
-        return '%%CB' + idx + '%%';
-    });
-
-    const lines = processed.split('\n');
-    let html = '';
-    let inParagraph = false;
-    const listStack = [];
-
-    function closeParagraph() {
-        if (inParagraph) {
-            html += '</p>';
-            inParagraph = false;
+function markdownBlocks(text) {
+    if (!text) return [];
+    const lines = text.split('\n');
+    const blocks = [];
+    let i = 0;
+    const special = line => /^(?:#{1,6} |>|\s*[-*] |\s*\d+\. |`{3,}|~{3,}|-{3,}\s*$|\*{3,}\s*$|_{3,}\s*$)/.test(line);
+    while (i < lines.length) {
+        const start = i;
+        while (i < lines.length && !lines[i].trim()) i++;
+        if (i >= lines.length) {
+            const tail = lines.slice(start).join('\n');
+            if (blocks.length) blocks.at(-1).source += tail;
+            else blocks.push({ source: text, html: '<p><br></p>' });
+            break;
         }
-    }
-
-    function openList(type, className) {
-        const cls = className ? ' class="' + className + '"' : '';
-        html += '<' + type + cls + '>\n';
-        listStack.push({ type: type, liOpen: false });
-    }
-
-    function closeOneList() {
-        const current = listStack.pop();
-        if (!current) return;
-        if (current.liOpen) html += '</li>\n';
-        html += '</' + current.type + '>\n';
-    }
-
-    function closeListsToDepth(depth) {
-        while (listStack.length > depth) {
-            closeOneList();
-        }
-    }
-
-    function closeAllLists() {
-        closeListsToDepth(0);
-    }
-
-    function addListItem(type, indentLevel, itemHtml, options) {
-        closeParagraph();
-
-        const depth = indentLevel + 1;
-        closeListsToDepth(depth);
-
-        if (listStack.length === depth) {
-            const current = listStack[listStack.length - 1];
-            if (current.type !== type) {
-                closeOneList();
-            }
-        }
-
-        while (listStack.length < depth) {
-            const isFirstLevel = listStack.length === 0;
-            openList(type, isFirstLevel && options ? options.listClass : '');
-        }
-
-        const current = listStack[listStack.length - 1];
-        if (current.liOpen) html += '</li>\n';
-        const liClass = options && options.itemClass ? ' class="' + options.itemClass + '"' : '';
-        html += '<li' + liClass + '>' + itemHtml;
-        current.liOpen = true;
-    }
-
-    for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-
-        if (/^%%CB\d+%%$/.test(line.trim())) {
-            closeAllLists();
-            closeParagraph();
-            html += line.trim() + '\n';
-            continue;
-        }
-
-        if (line.trim() === '') {
-            closeAllLists();
-            closeParagraph();
-            continue;
-        }
-
-        // 水平线
-        if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line.trim())) {
-            closeAllLists();
-            closeParagraph();
-            html += '<hr>\n';
-            continue;
-        }
-
-        // 标题
-        const headingMatch = line.match(/^(#{1,6}) (.+)$/);
-        if (headingMatch) {
-            closeAllLists();
-            closeParagraph();
-            html += '<h' + headingMatch[1].length + '>' + parseInline(headingMatch[2]) + '</h' + headingMatch[1].length + '>\n';
-            continue;
-        }
-
-        // 引用块
-        const quoteMatch = line.match(/^> (.+)$/);
-        if (quoteMatch) {
-            closeAllLists();
-            closeParagraph();
-            let quoteLines = [quoteMatch[1]];
-            while (i + 1 < lines.length && /^> (.+)$/.test(lines[i + 1])) {
-                i++;
-                quoteLines.push(lines[i].match(/^> (.+)$/)[1]);
-            }
-            html += '<blockquote><p>' + quoteLines.map(l => parseInline(l)).join('<br>') + '</p></blockquote>\n';
-            continue;
-        }
-
-        // 任务列表
-        const taskMatch = line.match(/^(\s*)[-*] \[([ xX])\] (.+)$/);
-        if (taskMatch) {
-            const indentLevel = Math.floor(taskMatch[1].length / 2);
-            const checked = taskMatch[2].toLowerCase() === 'x' ? ' checked' : '';
-            addListItem(
-                'ul',
-                indentLevel,
-                '<input type="checkbox"' + checked + ' disabled>' + parseInline(taskMatch[3]),
-                { listClass: 'task-list', itemClass: 'task-item' }
-            );
-            continue;
-        }
-
-        // 无序列表（支持多级缩进）
-        const ulMatch = line.match(/^(\s*)[-*] (.+)$/);
-        if (ulMatch) {
-            const indentLevel = Math.floor(ulMatch[1].length / 2);
-            addListItem('ul', indentLevel, parseInline(ulMatch[2]));
-            continue;
-        }
-
-        // 有序列表（支持多级缩进）
-        const olMatch = line.match(/^(\s*)\d+\. (.+)$/);
-        if (olMatch) {
-            const indentLevel = Math.floor(olMatch[1].length / 2);
-            addListItem('ol', indentLevel, parseInline(olMatch[2]));
-            continue;
-        }
-
-        // 段落
-        closeAllLists();
-        if (!inParagraph) {
-            html += '<p>';
-            inParagraph = true;
+        let html;
+        const fence = line.match(/^(`{3,}|~{3,})([^\s`]*)\s*$/);
+        const heading = line.match(/^(#{1,6}) (.*)$/);
+        if (fence) {
+            i++;
+            const code = [];
+            while (i < lines.length && !new RegExp('^' + fence[1][0] + '{' + fence[1].length + ',}\\s*$').test(lines[i])) code.push(lines[i++]);
+            if (i < lines.length) i++;
+            html = '<pre class="code-block"><code data-language="' + escapeHtml(fence[2]) + '">' + escapeHtml(code.join('\n')) + '</code></pre>';
+        } else if (heading) {
+            i++;
+            html = '<h' + heading[1].length + '>' + parseInline(heading[2]) + '</h' + heading[1].length + '>';
+        } else if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+            i++; html = '<hr>';
+        } else if (/^>/.test(line)) {
+            const quote = [];
+            while (i < lines.length && /^>/.test(lines[i])) quote.push(lines[i++].replace(/^> ?/, ''));
+            html = '<blockquote><p>' + quote.map(value => parseInline(value)).join('<br>') + '</p></blockquote>';
+        } else if (/^\s*(?:[-*] |\d+\. )/.test(line)) {
+            const items = [];
+            while (i < lines.length && /^\s*(?:[-*] |\d+\. )/.test(lines[i])) items.push(lines[i++]);
+            html = renderListBlock(items);
         } else {
-            html += '<br>\n';
+            const paragraph = [lines[i++]];
+            while (i < lines.length && lines[i].trim() && !special(lines[i])) paragraph.push(lines[i++]);
+            html = '<p>' + paragraph.map(value => parseInline(value)).join('<br>') + '</p>';
         }
-        html += parseInline(line);
+        while (i < lines.length && !lines[i].trim()) i++;
+        blocks.push({ source: lines.slice(start, i).join('\n') + (i < lines.length ? '\n' : ''), html });
     }
+    return blocks;
+}
 
-    closeAllLists();
-    closeParagraph();
-
-    html = html.replace(/%%CB(\d+)%%/g, (match, idx) => {
-        return codeBlocks[parseInt(idx)] || '';
-    });
-
+function renderListBlock(lines) {
+    let html = '';
+    const stack = [];
+    const close = () => { const list = stack.pop(); html += '</li></' + list + '>'; };
+    for (const line of lines) {
+        const match = line.match(/^(\s*)([-*]|\d+\.) (.*)$/);
+        const type = /\d/.test(match[2]) ? 'ol' : 'ul';
+        const depth = Math.min(Math.floor(match[1].length / 2), stack.length);
+        while (stack.length > depth + 1) close();
+        if (stack.length === depth + 1 && stack.at(-1) !== type) close();
+        if (stack.length <= depth) {
+            html += '<' + type + (type === 'ol' ? ' start="' + parseInt(match[2]) + '"' : '') + '><li>';
+            stack.push(type);
+        } else html += '</li><li>';
+        const task = match[3].match(/^\[([ xX])\] (.*)$/);
+        html += task ? '<input type="checkbox" disabled' + (task[1].toLowerCase() === 'x' ? ' checked' : '') + '>' + parseInline(task[2]) : parseInline(match[3]);
+    }
+    while (stack.length) close();
     return html;
 }
 
-function parseInline(text) {
-    let result = escapeHtml(text);
-    result = result.replace(/`([^`]+)`/g, '<code>$1</code>');
-    result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    // 图片（在链接之前处理，避免 ![...](...) 被链接正则误匹配）
-    result = result.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;height:auto;">');
-    result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-    return result;
+function safeEditorUrl(value, image) {
+    const url = String(value || '').trim();
+    if (!url || /[\u0000-\u0020\u007f]/.test(url)) return '';
+    if (image && /^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/=]+$/i.test(url)) return url;
+    if (/^(?:https?:|mailto:)/i.test(url)) return image && /^mailto:/i.test(url) ? '' : url;
+    // Local relative Markdown assets are allowed; protocol-relative and executable URLs are not.
+    if (/^[a-z][a-z0-9+.-]*:/i.test(url) || /^[\\/]{2}/.test(url) || url.includes('\\')) return '';
+    return url;
+}
+
+function parseInline(text, depth = 0) {
+    if (depth > 16) return escapeHtml(text);
+    let html = '';
+    for (let i = 0; i < text.length;) {
+        if (text[i] === '\\' && i + 1 < text.length && /[\\`*_[\]{}()#+.!>-]/.test(text[i + 1])) {
+            html += escapeHtml(text[i + 1]); i += 2; continue;
+        }
+        const ticks = text.slice(i).match(/^`+/)?.[0];
+        if (ticks) {
+            const end = text.indexOf(ticks, i + ticks.length);
+            if (end >= 0) {
+                let code = text.slice(i + ticks.length, end);
+                if (code.startsWith(' ') && code.endsWith(' ') && code.trim()) code = code.slice(1, -1);
+                html += '<code>' + escapeHtml(code) + '</code>'; i = end + ticks.length; continue;
+            }
+        }
+        const image = text.startsWith('![', i);
+        if (image || text[i] === '[') {
+            const labelStart = i + (image ? 2 : 1);
+            const labelEnd = text.indexOf('](', labelStart);
+            if (labelEnd >= 0) {
+                let end = labelEnd + 2, balance = 1;
+                for (; end < text.length; end++) {
+                    if (text[end] === '\\') { end++; continue; }
+                    if (text[end] === '(') balance++;
+                    if (text[end] === ')') { balance--; if (balance === 0) break; }
+                }
+                if (balance === 0) {
+                    const url = safeEditorUrl(text.slice(labelEnd + 2, end), image);
+                    const label = text.slice(labelStart, labelEnd);
+                    html += !url ? escapeHtml(text.slice(i, end + 1)) : image
+                        ? '<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(label) + '" style="max-width:100%;height:auto;">'
+                        : '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + parseInline(label, depth + 1) + '</a>';
+                    i = end + 1; continue;
+                }
+            }
+        }
+        const marker = text.startsWith('**', i) ? '**' : text[i] === '*' ? '*' : null;
+        if (marker) {
+            const end = text.indexOf(marker, i + marker.length);
+            if (end > i + marker.length) {
+                const tag = marker === '**' ? 'strong' : 'em';
+                html += '<' + tag + '>' + parseInline(text.slice(i + marker.length, end), depth + 1) + '</' + tag + '>';
+                i = end + marker.length; continue;
+            }
+        }
+        html += escapeHtml(text[i++]);
+    }
+    return html;
 }
 
 // ====================================================
@@ -572,6 +552,8 @@ function saveUndoSnapshot(editor) {
  * 执行撤销
  */
 function undo(editor) {
+    clearTimeout(UndoStack._textTimer);
+    saveUndoSnapshot(editor);
     if (UndoStack.pointer <= 0) return;
 
     UndoStack._isRestoring = true;
@@ -600,6 +582,8 @@ function redo(editor) {
  * 清空撤销栈
  */
 function clearUndoStack() {
+    clearTimeout(UndoStack._textTimer);
+    UndoStack._lastTextInput = 0;
     UndoStack.stack = [];
     UndoStack.pointer = -1;
     UndoStack._isRestoring = false;
@@ -621,8 +605,11 @@ function insertImageFromBlob(blob, editor) {
         return;
     }
 
+    if (!/^image\/(png|jpeg|gif|webp)$/i.test(blob.type)) { alert('仅支持 PNG、JPEG、GIF 和 WebP 图片。'); return; }
+    const session = AppState._editSession;
     const reader = new FileReader();
     reader.onload = () => {
+        if (session !== AppState._editSession || AppState._showTrash || AppState._currentNoteReadOnly) return;
         saveUndoSnapshot(editor);
 
         // 确保编辑器有焦点
@@ -667,6 +654,7 @@ function insertImageFromBlob(blob, editor) {
  * 处理剪贴板粘贴事件，检测图片
  */
 function handleImagePaste(e, editor) {
+    if (AppState._showTrash || AppState._currentNoteReadOnly) { e.preventDefault(); return; }
     const items = e.clipboardData && e.clipboardData.items;
     if (!items) return;
 
@@ -678,12 +666,22 @@ function handleImagePaste(e, editor) {
             return;
         }
     }
+    // Pasting HTML must not import event handlers, iframes, or executable links.
+    const text = e.clipboardData?.getData('text/plain');
+    if (text !== undefined) {
+        e.preventDefault();
+        saveUndoSnapshot(editor);
+        document.execCommand('insertText', false, text);
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+    }
 }
 
 /**
  * 处理拖拽放置事件，检测图片文件
  */
 function handleImageDrop(e, editor) {
+    e.preventDefault();
+    if (AppState._showTrash || AppState._currentNoteReadOnly) return;
     const files = e.dataTransfer && e.dataTransfer.files;
     if (!files || files.length === 0) return;
 
@@ -707,17 +705,14 @@ function initFormatToolbar() {
     const toolbar = $('#format-toolbar');
     if (!editor || !toolbar) return;
 
-    // 文本输入时保存快照（合并连续输入，间隔超过 1 秒才存新快照）
-    editor.addEventListener('input', (e) => {
-        if (UndoStack._isRestoring) return;
-        const now = Date.now();
-        if (now - UndoStack._lastTextInput > 1000) {
-            clearTimeout(UndoStack._textTimer);
-            UndoStack._textTimer = setTimeout(() => {
-                saveUndoSnapshot(editor);
-            }, 300);
-        }
-        UndoStack._lastTextInput = now;
+    initEditorComposition(editor, onEditorInput);
+    editor.addEventListener('input', () => {
+        if (UndoStack._isRestoring || AppState._composing) return;
+        clearTimeout(UndoStack._textTimer);
+        const session = AppState._editSession;
+        UndoStack._textTimer = setTimeout(() => {
+            if (session === AppState._editSession) saveUndoSnapshot(editor);
+        }, 300);
     });
 
     // 选中文字后显示工具栏（mouseup + touchend）
@@ -1099,7 +1094,8 @@ function toggleLink(editor, sel) {
     } else {
         // 添加链接
         const text = sel.toString();
-        const url = prompt('输入链接地址：', 'https://');
+        const inputUrl = prompt('输入链接地址：', 'https://');
+        const url = safeEditorUrl(inputUrl, false);
         if (url) {
             wrapSelection(editor, sel, 'a');
             // 设置 href
@@ -1154,4 +1150,27 @@ function normalizeBlockquote(bq) {
         });
         bq.appendChild(p);
     }
+}
+
+function initEditorComposition(editor, onInput) {
+    if (editor.dataset.compositionBound) return;
+    editor.dataset.compositionBound = 'true';
+    editor.addEventListener('compositionstart', () => { AppState._composing = true; });
+    editor.addEventListener('compositionend', () => {
+        AppState._composing = false;
+        onInput();
+        saveUndoSnapshot(editor);
+    });
+    editor.addEventListener('keydown', event => {
+        if (event.isComposing || AppState._composing || event.keyCode === 229) event.stopPropagation();
+    });
+    editor.addEventListener('click', event => {
+        const link = event.target.closest('a');
+        if (!link) return;
+        event.preventDefault();
+        const url = safeEditorUrl(link.getAttribute('href'), false);
+        if (!url || !/^(https?:|mailto:)/i.test(url)) return;
+        if (window.desktopService?.isAvailable()) window.desktopService.openExternal(url).catch(error => updateStatusBarText('save', String(error)));
+        else window.open(url, '_blank', 'noopener,noreferrer');
+    });
 }

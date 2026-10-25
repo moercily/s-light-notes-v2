@@ -6,7 +6,7 @@
   "platforms": ["macOS", "windows", "linux"],
   "permissions": [
     "core:event:allow-listen", "core:event:allow-unlisten", "core:window:allow-start-dragging",
-    "allow-desktop-read-note", "allow-desktop-save-note", "allow-sticky-open", "allow-sticky-context",
+    "allow-desktop-read-note", "allow-desktop-open-external", "allow-desktop-save-note", "allow-sticky-open", "allow-sticky-context",
     "allow-sticky-pin", "allow-sticky-dirty", "allow-sticky-main", "allow-desktop-close-ready"
   ]
 }

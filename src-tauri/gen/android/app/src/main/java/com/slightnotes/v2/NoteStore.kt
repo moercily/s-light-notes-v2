@@ -46,6 +46,7 @@ class NoteStore(private val root: File) {
         return readFile(file, inTrash)
     }
 
+    @Synchronized
     fun save(id: String?, suggestedId: String, content: String): StoredNote {
         val directory = directory(false)
         val resolvedId = id?.let(::validateId) ?: uniqueId(directory, suggestedId)
@@ -53,6 +54,18 @@ class NoteStore(private val root: File) {
         if (destination.exists()) requireRegularFile(destination)
         atomicWrite(destination, content)
         return readFile(destination, false)
+    }
+
+    @Synchronized
+    fun saveChecked(id: String?, suggestedId: String, content: String, expectedVersion: String?): StoredNote {
+        if (id != null) {
+            check(!id.contains(".sync-conflict-")) { "冲突副本为只读，请保留副本。" }
+            val current = read(id, false)
+            check(current != null && expectedVersion != null && contentVersion(current.content) == expectedVersion) {
+                "NOTE_CONFLICT: 原笔记已修改或删除，请保留副本后重新打开。"
+            }
+        }
+        return save(id, suggestedId, content)
     }
 
     fun moveToTrash(id: String): StoredNote {
@@ -164,6 +177,9 @@ class NoteStore(private val root: File) {
     }
 
     companion object {
+        fun contentVersion(content: String): String = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(content.toByteArray(StandardCharsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
         private val INVALID_FILENAME_CHARS = setOf('/', '\\', ':', '*', '?', '"', '<', '>', '|')
     }
 }

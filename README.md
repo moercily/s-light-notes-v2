@@ -46,7 +46,7 @@ release. Losing them prevents future signed upgrades.
 ## Current Alpha Boundary
 
 - Desktop Markdown create, edit, save, trash, restore, and permanent deletion are implemented.
-- Current application version is `0.0.1`: major features, minor features, then
+- Current development version is `0.1.0` (published release remains `0.0.1`): major features, minor features, then
   functional adjustments/bug fixes/optimization.
 - Desktop settings use **通用 / 便签设置 / 同步设置 / 关于**. General includes
   optional login startup; sticky settings record a key combination followed by
@@ -65,3 +65,18 @@ release. Losing them prevents future signed upgrades.
 - Android background synchronization is intentionally bounded. Release
   store submission, controlled long-duration power characterization, and some
   native desktop package checks remain release gates.
+
+## Reliability and portability
+
+The development build preserves untouched Markdown blocks, guards desktop and
+Android stale saves, and retains edits when saving fails. Desktop import creates
+copies instead of overwriting existing notes. Export creates a new Markdown
+folder with a SHA-256 manifest; it excludes trash, application settings, and sync
+credentials. Font, size and line spacing are available in General settings and
+mobile settings, and apply to sticky windows too.
+
+Run `npm run test:p2p` for actual two-engine loopback transfer, offline recovery,
+conflict, identity and shutdown tests. This does not replace two-machine packaged
+UI acceptance. The native desktop CI matrix builds macOS arm64/Intel, Windows x64
+and Linux x64 installers with checksums. See the [release checklist](docs/V2_RELEASE_CHECKLIST.md)
+and [current plan](docs/V2_DEVELOPMENT_PLAN.md) for remaining release gates.

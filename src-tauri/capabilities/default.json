@@ -7,7 +7,8 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "allow-get-app-paths", "allow-ensure-notes-folder", "allow-desktop-list-notes", "allow-desktop-read-note",
+    "allow-get-app-paths", "allow-ensure-notes-folder", "allow-desktop-list-notes", "allow-desktop-notes-revision", "allow-desktop-read-note",
+    "allow-desktop-import-notes", "allow-desktop-export-notes", "allow-desktop-open-external",
     "allow-desktop-save-note", "allow-desktop-move-to-trash", "allow-desktop-restore-note", "allow-desktop-delete-note",
     "allow-syncthing-status", "allow-syncthing-start", "allow-syncthing-stop", "allow-syncthing-proxy-request",
     "allow-syncthing-apply-folder-config", "allow-syncthing-confirm-folder-config", "allow-syncthing-pairing-info",

@@ -27,6 +27,19 @@ class NoteStoreTest {
     }
 
     @Test
+    fun checkedSavesRejectStaleDeletedAndConflictSources() {
+        val first = store.saveChecked(null, "note", "first", null)
+        val version = NoteStore.contentVersion(first.content)
+        store.saveChecked(first.id, "note", "second", version)
+        assertThrows(IllegalStateException::class.java) { store.saveChecked(first.id, "note", "stale", version) }
+        assertEquals("second", store.read(first.id, false)?.content)
+        store.moveToTrash(first.id)
+        assertThrows(IllegalStateException::class.java) { store.saveChecked(first.id, "note", "revive", version) }
+        val conflict = store.save(null, "note.sync-conflict-example", "conflict")
+        assertThrows(IllegalStateException::class.java) { store.saveChecked(conflict.id, "note", "overwrite", NoteStore.contentVersion(conflict.content)) }
+    }
+
+    @Test
     fun savesReadsAndListsMarkdownFiles() {
         val saved = store.save(null, "第一条笔记", "# 第一条笔记\n\n正文")
 

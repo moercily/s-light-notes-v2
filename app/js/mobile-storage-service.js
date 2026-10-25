@@ -48,12 +48,13 @@
             });
         },
 
-        save(id, suggestedId, content) {
+        save(id, suggestedId, content, expectedVersion) {
             return invokeAndroid('mobile_storage_save', {
                 request: {
                     id: id || null,
                     suggestedId: suggestedId,
                     content: content,
+                    ...(expectedVersion === undefined ? {} : { expectedVersion }),
                 },
             });
         },

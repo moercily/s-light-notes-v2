@@ -27,6 +27,7 @@ class StorageSaveArgs {
     var id: String? = null
     lateinit var suggestedId: String
     lateinit var content: String
+    var expectedVersion: String? = null
 }
 
 @InvokeArg
@@ -185,7 +186,7 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
     @Command
     fun saveNote(invoke: Invoke) = resolve(invoke) {
         val args = invoke.parseArgs(StorageSaveArgs::class.java)
-        JSObject().put("note", noteToJson(noteStore.save(args.id, args.suggestedId, args.content)))
+        JSObject().put("note", noteToJson(noteStore.saveChecked(args.id, args.suggestedId, args.content, args.expectedVersion)))
     }
 
     @Command
@@ -229,6 +230,7 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
         return JSObject().apply {
             put("id", note.id)
             put("content", note.content)
+            put("version", NoteStore.contentVersion(note.content))
             put("updatedAt", note.updatedAt)
             put("inTrash", note.inTrash)
         }

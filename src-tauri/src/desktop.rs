@@ -13,8 +13,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
-mod sticky;
 mod settings;
+mod sticky;
+mod transfer;
 
 #[derive(Default)]
 struct NoteWrites(Mutex<()>);
@@ -239,6 +240,41 @@ fn desktop_list_notes(
 ) -> Result<Vec<DesktopNote>, String> {
     let notes_dir = default_notes_dir(&app)?;
     list_notes_in_dir(&notes_dir, request.in_trash)
+}
+
+#[tauri::command]
+fn desktop_notes_revision(app: AppHandle, request: NoteListRequest) -> Result<String, String> {
+    notes_revision(&default_notes_dir(&app)?, request.in_trash)
+}
+
+fn notes_revision(notes_dir: &Path, in_trash: bool) -> Result<String, String> {
+    let directory = note_directory(notes_dir, in_trash)?;
+    let mut entries = Vec::new();
+    for entry in fs::read_dir(directory).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        if !entry.file_name().to_string_lossy().ends_with(".md") {
+            continue;
+        }
+        let metadata = fs::symlink_metadata(entry.path()).map_err(|error| error.to_string())?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            continue;
+        }
+        let modified = metadata
+            .modified()
+            .map_err(|error| error.to_string())?
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        entries.push((
+            entry.file_name().to_string_lossy().into_owned(),
+            metadata.len(),
+            modified,
+        ));
+    }
+    entries.sort();
+    serde_json::to_string(&entries)
+        .map(|value| content_version(&value))
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -2310,9 +2346,15 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             let target = app.clone();
-            let _ = app.run_on_main_thread(move || { let _ = sticky::show_main(&target); });
+            let _ = app.run_on_main_thread(move || {
+                let _ = sticky::show_main(&target);
+            });
         }))
-        .plugin(tauri_plugin_autostart::Builder::new().app_name("s-light notes").build())
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .app_name("s-light notes")
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .manage(SyncthingProcess::default())
@@ -2352,8 +2394,12 @@ pub fn run() {
             get_app_paths,
             ensure_notes_folder,
             desktop_list_notes,
+            desktop_notes_revision,
             desktop_read_note,
             desktop_save_note,
+            transfer::desktop_import_notes,
+            transfer::desktop_export_notes,
+            transfer::desktop_open_external,
             desktop_move_to_trash,
             desktop_restore_note,
             desktop_delete_note,

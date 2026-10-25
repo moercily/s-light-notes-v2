@@ -32,7 +32,7 @@
         </ul>
         <div id="sidebar-footer">
             <button id="btn-open-folder" class="btn-storage" title="选择本地文件夹存储笔记">📂 打开文件夹</button>
-            <button id="btn-export" class="btn-storage btn-idb-only" title="导出所有笔记为 .md 文件">📥 导出全部</button>
+            <button id="btn-export" class="btn-storage btn-idb-only" title="导出普通笔记和冲突副本（不含回收站、设置与同步身份）">📥 导出全部</button>
             <button id="btn-import" class="btn-storage btn-idb-only" title="从 .md 文件导入笔记">📤 导入</button>
             <button id="btn-show-trash" class="btn-storage" title="查看回收站中的笔记">🗑 回收站</button>
             <button id="btn-settings" class="btn-storage" title="打开设置">⚙ 设置</button>
@@ -228,6 +228,7 @@
 
     <!-- 脚本：按依赖顺序加载 -->
     <script src="js/utils.js"></script>
+    <script src="js/appearance.js"></script>
     <script src="js/app-info.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/desktop-service.js"></script>

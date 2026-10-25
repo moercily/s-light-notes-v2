@@ -19,7 +19,7 @@
     "resources": [],
     "android": {
       "minSdkVersion": 26,
-      "versionCode": 2000001
+      "versionCode": 2000002
     }
   }
 }

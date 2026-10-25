@@ -21,6 +21,7 @@ struct AndroidNote {
     content: String,
     updated_at: u64,
     in_trash: bool,
+    version: String,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -52,6 +53,7 @@ struct StorageSaveRequest {
     id: Option<String>,
     suggested_id: String,
     content: String,
+    expected_version: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -224,9 +226,7 @@ fn syncthing_stop(native: State<'_, AndroidNative>) -> Result<AndroidSyncStatus,
 }
 
 #[tauri::command]
-fn syncthing_pairing_info(
-    native: State<'_, AndroidNative>,
-) -> Result<serde_json::Value, String> {
+fn syncthing_pairing_info(native: State<'_, AndroidNative>) -> Result<serde_json::Value, String> {
     native_call(&native, "getPairingInfo", ())
 }
 

@@ -358,9 +358,16 @@ function normalizeDesktopNote(note) {
     };
 }
 
+const desktopNoteCache = new Map();
 async function desktopListNotes() {
+    const inTrash = !!AppState._showTrash;
+    const revision = window.desktopService.notesRevision ? await window.desktopService.notesRevision(inTrash) : null;
+    const cached = desktopNoteCache.get(inTrash);
+    if (revision && cached?.revision === revision && Date.now() - cached.checked < 30000) return cached.notes;
     const notes = await window.desktopService.listNotes(AppState._showTrash);
-    return notes.map(normalizeDesktopNote);
+    const result = notes.map(normalizeDesktopNote);
+    desktopNoteCache.set(inTrash, { revision, notes: result, checked: Date.now() });
+    return result;
 }
 
 async function desktopReadNote(id) {
@@ -369,6 +376,7 @@ async function desktopReadNote(id) {
 }
 
 async function desktopSaveNote(id, content) {
+    desktopNoteCache.clear();
     const suggestedId = generateNoteId(extractTitle(content));
     const result = await window.desktopService.saveNote(id, suggestedId, content);
     return {
@@ -379,10 +387,12 @@ async function desktopSaveNote(id, content) {
 }
 
 async function desktopMoveToTrash(id) {
+    desktopNoteCache.clear();
     return window.desktopService.moveToTrash(id);
 }
 
 async function desktopRestoreFromTrash(id) {
+    desktopNoteCache.clear();
     return window.desktopService.restoreNote(id);
 }
 
@@ -410,11 +420,12 @@ async function mobileReadNote(id) {
 
 async function mobileSaveNote(id, content) {
     const suggestedId = generateNoteId(extractTitle(content));
-    const result = await window.mobileStorageService.save(id, suggestedId, content);
+    const result = await window.mobileStorageService.save(id, suggestedId, content, id ? AppState._version : undefined);
     return {
         id: result.id,
         title: extractTitle(content),
         updatedAt: result.updatedAt,
+        version: result.version,
     };
 }
 
@@ -524,7 +535,7 @@ async function searchNotes(query) {
     if (!query || !query.trim()) {
         return listNotes();
     }
-    const all = await listNotes();
+    const all = Array.isArray(AppState.notes) ? AppState.notes : await listNotes();
     const q = query.toLowerCase().trim();
     return all.filter(note => {
         return note.title.toLowerCase().includes(q) ||
@@ -536,6 +547,7 @@ async function searchNotes(query) {
  * IDB 模式：导出所有笔记为 .md 文件下载
  */
 async function exportAllNotes() {
+    if (AppState.storageMode === 'desktop') return window.desktopService.exportNotes();
     const notes = await listNotes();
     for (const note of notes) {
         const blob = new Blob([note.content], { type: 'text/markdown;charset=utf-8' });
@@ -558,6 +570,7 @@ async function exportAllNotes() {
  * @returns {Promise<number>} 导入的笔记数量
  */
 function importNotes() {
+    if (AppState.storageMode === 'desktop') return window.desktopService.importNotes();
     return new Promise((resolve, reject) => {
         const input = document.createElement('input');
         input.type = 'file';

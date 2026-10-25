@@ -25,7 +25,7 @@ s-light notes v2 is a P2P synced Markdown notes app. Notes remain ordinary `.md`
 - Login startup is an explicit, default-off desktop choice. Global sticky
   shortcuts are recorded from keyboard input and saved with Esc; Esc alone
   removes the binding. Existing bindings survive the settings migration.
-- The app displays version `0.0.1`. The three components mean major features,
+- The app displays version `0.1.0`. The three components mean major features,
   minor features, and functional adjustment/bug fix/optimization respectively.
 - Desktop notes can open in independent editable sticky windows. Their pin
   button sits immediately left of close, and the shortcut can be configured.
@@ -40,7 +40,7 @@ windows or desktop global shortcuts.
 
 - Desktop is the primary v2 platform: macOS, Windows, and Linux through Tauri with a bundled Syncthing sidecar.
 - Desktop alpha does not silently remain in the tray or background after the user quits the app.
-- Android is the current highest-priority delivery platform and targets an in-app Syncthing engine managed by an Android foreground service; Syncthing-Fork remains a compatibility/testing reference only.
+- Desktop/Android reliability and release acceptance are the current delivery priority; Android and targets an in-app Syncthing engine managed by an Android foreground service; Syncthing-Fork remains a compatibility/testing reference only.
 - Android targets API 36 with API 26 as its minimum and initially supports arm64 physical devices plus x86-64 emulators.
 - Android stores real Markdown files in an application-owned directory and exposes only note files through the system document picker. It does not request broad all-files access.
 - Android foreground sync is user-visible and bounded by current platform limits. The app does not promise continuous all-day background execution or start a data-sync foreground service at boot.
