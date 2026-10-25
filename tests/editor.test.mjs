@@ -59,6 +59,8 @@ let inserted;
 w.document.execCommand = (command, _, text) => { inserted = { command, text }; };
 w.handleImagePaste({ preventDefault() {}, clipboardData: { items: [], getData: () => '<script>bad()</script>' } }, editor);
 assert.deepEqual(inserted, { command: 'insertText', text: '<script>bad()</script>' });
+w.handleImagePaste({ preventDefault() {}, clipboardData: { getData: () => '<img onerror=bad()>' } }, editor);
+assert.deepEqual(inserted, { command: 'insertText', text: '<img onerror=bad()>' });
 
 // Immediate undo captures edits even before the debounced snapshot fires.
 load('原文'); w.clearUndoStack(); w.saveUndoSnapshot(editor);

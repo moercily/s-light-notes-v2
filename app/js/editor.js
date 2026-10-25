@@ -656,8 +656,7 @@ function insertImageFromBlob(blob, editor) {
  */
 function handleImagePaste(e, editor) {
     if (AppState._showTrash || AppState._currentNoteReadOnly) { e.preventDefault(); return; }
-    const items = e.clipboardData && e.clipboardData.items;
-    if (!items) return;
+    const items = e.clipboardData?.items || [];
 
     for (const item of items) {
         if (item.type.startsWith('image/')) {
@@ -669,8 +668,8 @@ function handleImagePaste(e, editor) {
     }
     // Pasting HTML must not import event handlers, iframes, or executable links.
     const text = e.clipboardData?.getData('text/plain');
+    e.preventDefault();
     if (text !== undefined) {
-        e.preventDefault();
         saveUndoSnapshot(editor);
         document.execCommand('insertText', false, text);
         editor.dispatchEvent(new Event('input', { bubbles: true }));
