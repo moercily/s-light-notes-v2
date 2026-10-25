@@ -343,6 +343,7 @@ Lifecycle validation passed on 2026-07-15: normal macOS Quit stopped both sideca
 
 ### 最终产物与清理
 
+- 五个原生安装包已下载到 `release/native-0.1.0/`，全部与 CI 的 SHA-256 清单匹配。
 - CI 提供两个 Mac DMG、Windows x64 NSIS EXE、Linux x64 deb/AppImage，每个平台均有 SHA256SUMS；原生构建成功不等于安装后人工验收通过。
 - 最终 Android arm64/x86-64 APK 和通用 AAB 已收集到 `release/android/0.1.0/` 并验证签名。最终 arm64 包在独立 API 36 模拟器同签名重装、冷启动通过，无 AndroidRuntime 崩溃。
 - 临时 Android 模拟器 `slight-release-qa` 已关闭并删除；原有 AVD 保留。
