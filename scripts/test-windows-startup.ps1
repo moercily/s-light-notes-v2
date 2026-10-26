@@ -8,6 +8,13 @@ if (Get-NetTCPConnection -State Listen -LocalPort 8385 -ErrorAction SilentlyCont
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public class SlightWindow {
+    [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int index);
+}
+'@
 function Find-Control($root, $id) {
     $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
     $root.FindFirst([Windows.Automation.TreeScope]::Descendants, $condition)
@@ -51,12 +58,40 @@ try {
     Wait-Until 'the saved Markdown' {
         (Test-Path $note) -and ([IO.File]::ReadAllText($note).Trim() -eq $text)
     } | Out-Null
+    (Find-Control $window 'btn-open-sticky').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    $sticky = Wait-Until 'the native sticky window' {
+        $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ProcessIdProperty, $app.Id)
+        $windows = [Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $condition)
+        foreach ($candidate in $windows) { if (Find-Control $candidate 'sticky-pin') { return $candidate } }
+    }
+    (Find-Control $sticky 'sticky-pin').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Wait-Until 'the sticky HWND becoming topmost' {
+        ([SlightWindow]::GetWindowLong([IntPtr]$sticky.Current.NativeWindowHandle, -20) -band 8) -ne 0
+    } | Out-Null
+    (Find-Control $sticky 'sticky-pin').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Wait-Until 'the sticky HWND leaving topmost' {
+        ([SlightWindow]::GetWindowLong([IntPtr]$sticky.Current.NativeWindowHandle, -20) -band 8) -eq 0
+    } | Out-Null
+    (Find-Control $sticky 'note-editor').SetFocus()
+    [Windows.Forms.SendKeys]::SendWait('^{END}')
+    [Windows.Forms.SendKeys]::SendWait(' sticky-edited')
+    [Windows.Forms.SendKeys]::SendWait('^s')
+    Wait-Until 'the sticky edit reaching Markdown' {
+        @(Get-ChildItem (Join-Path $documents 's-light-notes') -Filter '*.md' | Where-Object {
+            [IO.File]::ReadAllText($_.FullName).Trim() -eq "$text sticky-edited"
+        }).Count -eq 1
+    } | Out-Null
+    (Find-Control $sticky 'sticky-close').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Wait-Until 'the sticky window closing' {
+        try { $null = $sticky.Current.Name; return $false } catch { return $true }
+    } | Out-Null
+    $editor.SetFocus()
     [Windows.Forms.SendKeys]::SendWait('%{F4}')
     if (!$app.WaitForExit(15000)) { throw 'The app did not finish a normal close.' }
     Wait-Until 'managed engine shutdown' {
         !(Get-NetTCPConnection -State Listen -LocalPort 8385 -ErrorAction SilentlyContinue)
     } | Out-Null
-    Write-Output 'Windows installed app: native storage, engine, editor save and normal close passed.'
+    Write-Output 'Windows installed app: native storage, engine, editor save, sticky edit, native topmost toggle and normal close passed.'
 } finally {
     if (!$app.HasExited) { & taskkill.exe /T /F /PID $app.Id | Out-Null }
 }

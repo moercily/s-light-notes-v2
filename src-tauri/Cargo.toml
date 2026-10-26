@@ -1,6 +1,6 @@
 [package]
 name = "s-light-notes"
-version = "0.1.0"
+version = "0.1.1"
 description = "P2P synced Markdown notes powered by Syncthing"
 authors = ["s-light notes contributors"]
 edition = "2021"

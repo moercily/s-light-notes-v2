@@ -4,6 +4,12 @@ on:
     branches: [main, codex/reliability-and-release]
   pull_request:
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: Native platforms to validate (no local windows)
+        type: choice
+        default: windows-linux
+        options: [windows-linux, all]
 permissions:
   contents: read
 concurrency:
@@ -15,19 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: macos-15
-            target: aarch64-apple-darwin
-            bundles: app,dmg
-          - runner: macos-15-intel
-            target: x86_64-apple-darwin
-            bundles: app,dmg
-          - runner: windows-2022
-            target: x86_64-pc-windows-msvc
-            bundles: nsis
-          - runner: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            bundles: deb,appimage
+        include: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.platforms == 'windows-linux' && '[{"runner":"windows-2022","target":"x86_64-pc-windows-msvc","bundles":"nsis"},{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","bundles":"deb,appimage"}]' || '[{"runner":"macos-15","target":"aarch64-apple-darwin","bundles":"app,dmg"},{"runner":"macos-15-intel","target":"x86_64-apple-darwin","bundles":"app,dmg"},{"runner":"windows-2022","target":"x86_64-pc-windows-msvc","bundles":"nsis"},{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","bundles":"deb,appimage"}]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     env:
@@ -45,6 +39,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev librsvg2-dev libayatana-appindicator3-dev patchelf
+          sudo apt-get install -y xvfb openbox dbus-x11 python3-pyatspi xdotool
       - name: Prepare native Rust
         run: |
           rustup toolchain install stable --profile minimal
@@ -67,11 +62,23 @@ jobs:
           $installers = @(Get-ChildItem 'src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe')
           if ($installers.Count -ne 1) { throw 'Expected one NSIS installer.' }
           ./scripts/test-windows-startup.ps1 -Installer $installers[0].FullName
+      - name: Linux installed application acceptance in virtual display
+        if: runner.os == 'Linux'
+        run: |
+          sudo dpkg -i src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
+          dbus-run-session -- xvfb-run -a python3 scripts/test-linux-startup.py
       - name: Verify macOS bundle signature and architecture
         if: runner.os == 'macOS'
         run: node scripts/verify-macos-bundle.mjs "src-tauri/target/${{ matrix.target }}/release/bundle/macos/s-light notes.app"
       - name: Collect installers and checksums
         run: node scripts/collect-desktop-release.mjs src-tauri/target/${{ matrix.target }}/release/bundle release/${{ matrix.target }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: acceptance-${{ matrix.target }}
+          path: release/qa/
+          if-no-files-found: ignore
+          retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: desktop-${{ matrix.target }}
