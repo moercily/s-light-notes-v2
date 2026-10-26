@@ -14,6 +14,7 @@ using System.Runtime.InteropServices;
 public class SlightWindow {
     [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int index);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
 }
 '@
 function Find-Control($root, $id) {
@@ -121,9 +122,10 @@ try {
             [IO.File]::ReadAllText($_.FullName).Trim() -eq "$text sticky-edited"
         }).Count -eq 1
     } | Out-Null
+    $stickyHandle = [IntPtr]$sticky.Current.NativeWindowHandle
     Click-Control $sticky 'sticky-close'
     Wait-Until 'the sticky window closing' {
-        try { $null = $sticky.Current.Name; return $false } catch { return $true }
+        ![SlightWindow]::IsWindow($stickyHandle)
     } | Out-Null
     # A separate guest application owns focus while the OS dispatches the binding.
     $other = Start-Process notepad.exe -PassThru
@@ -135,9 +137,10 @@ try {
         $windows = [Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $condition)
         foreach ($candidate in $windows) { if (Find-Control $candidate 'sticky-pin') { return $candidate } }
     }
+    $shortcutHandle = [IntPtr]$shortcutSticky.Current.NativeWindowHandle
     Click-Control $shortcutSticky 'sticky-close'
     Wait-Until 'the shortcut sticky closing' {
-        try { $null = $shortcutSticky.Current.Name; return $false } catch { return $true }
+        ![SlightWindow]::IsWindow($shortcutHandle)
     } | Out-Null
     [SlightWindow]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle) | Out-Null
     $editor.SetFocus()

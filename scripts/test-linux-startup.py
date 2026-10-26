@@ -134,6 +134,11 @@ try:
             click('保存并关闭')
             until(lambda: not find('便签正文'), 'shortcut sticky closes')
             editor = until(lambda: find('note-editor'), 'main editor')
+            windows = subprocess.run(['xdotool', 'search', '--onlyvisible', '--pid', str(app.pid)],
+                capture_output=True, text=True, check=True).stdout.split()
+            main_window = next(wid for wid in windows if subprocess.run(['xdotool', 'getwindowname', wid],
+                capture_output=True, text=True).stdout.strip() == 's-light notes')
+            subprocess.run(['xdotool', 'windowactivate', '--sync', main_window], check=True)
             editor.queryComponent().grabFocus()
             subprocess.run(['xdotool', 'key', '--clearmodifiers', 'alt+F4'], check=True)
             app.wait(timeout=15)
