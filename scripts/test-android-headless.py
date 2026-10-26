@@ -58,11 +58,12 @@ class Device:
     def control(self, key):
         return self.wait(lambda nodes: next((node for node in nodes
             if (node.get('resource-id') == key or node.get('text') == key)
-            and node.get('enabled') == 'true'), None), key)
+            and node.get('enabled') == 'true' and node.get('bounds') != '[0,0][0,0]'), None), key)
 
     def note(self, title):
         return self.wait(lambda nodes: next((node for node in nodes
             if node.get('class') == 'android.widget.Button'
+            and node.get('bounds') != '[0,0][0,0]'
             and (node.get('text') == title or node.get('text', '').startswith(title + ' '))), None), title)
 
     def tap(self, node):
@@ -155,10 +156,13 @@ def free_port():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--apk', type=Path, default=ROOT / 'release/android/0.1.0/s-light-notes-0.1.0-arm64-v8a.apk')
+    version = json.loads((ROOT / 'package.json').read_text())['version']
+    parser.add_argument('--apk', type=Path, default=ROOT / f'release/android/{version}/s-light-notes-{version}-arm64-v8a.apk')
     parser.add_argument('--previous-apk', type=Path, help='Optional older signed build to upgrade from')
     parser.add_argument('--identity-only', action='store_true', help='Check offline engine identity across install without creating notes')
     parser.add_argument('--check-identity', action='store_true', help='Also check current-version identity reinstall before the two-note upgrade case')
+    parser.add_argument('--p2p-peer-archive', type=Path, help='Pinned official Linux ARM64 v2.1.2 archive; run real Docker peer and signed upgrade instead')
+    parser.add_argument('--editor-qa-ime', type=Path, help='Test-only fixture IME APK; run Chinese composition and 200-file native workload instead')
     args = parser.parse_args()
     apk = args.apk.resolve()
     previous = args.previous_apk.resolve() if args.previous_apk else apk
@@ -181,7 +185,7 @@ def main():
         'notes': 0 if args.identity_only else 2, 'passed': False}
     output = ROOT / 'release/qa'
     output.mkdir(parents=True, exist_ok=True)
-    report_path = output / ('android-headless-identity.json' if args.identity_only else 'android-headless.json')
+    report_path = output / ('android-editor.json' if args.editor_qa_ime else 'android-p2p-upgrade.json' if args.p2p_peer_archive else 'android-headless-identity.json' if args.identity_only else 'android-headless.json')
     report_path.write_text(json.dumps(report, indent=2) + '\n')
     try:
         run([AVDMANAGER, 'create', 'avd', '--name', name, '--package',
@@ -206,13 +210,46 @@ def main():
 
             device.adb('shell', 'wm', 'size', '480x960')
             device.adb('shell', 'wm', 'density', '240')
+            device.adb('shell', 'settings', 'put', 'system', 'screen_off_timeout', '1800000')
+            device.adb('shell', 'svc', 'power', 'stayon', 'true')
             device.adb('shell', 'svc', 'wifi', 'disable')
             device.adb('shell', 'svc', 'data', 'disable')
+            # Emulator virtual Ethernet remains available even with Wi-Fi/data off.
+            # Restrict this owned guest to its own loopback and the emulator host alias.
+            device.adb('root')
+            device.adb('wait-for-device')
+            device.adb('shell', 'iptables', '-A', 'OUTPUT', '-d', '127.0.0.0/8', '-j', 'ACCEPT')
+            device.adb('shell', 'iptables', '-A', 'OUTPUT', '-d', '10.0.2.2/32', '-j', 'ACCEPT')
+            device.adb('shell', 'iptables', '-A', 'OUTPUT', '-j', 'REJECT')
+            device.adb('shell', 'ip6tables', '-A', 'OUTPUT', '-d', '::1/128', '-j', 'ACCEPT')
+            device.adb('shell', 'ip6tables', '-A', 'OUTPUT', '-j', 'REJECT')
             for setting in ['window_animation_scale', 'transition_animation_scale', 'animator_duration_scale']:
                 device.adb('shell', 'settings', 'put', 'global', setting, '0')
             device.adb('install', '--no-incremental', str(apk if args.check_identity else previous))
             report['fromVersion'] = run([SDK / 'cmdline-tools/latest/bin/apkanalyzer', 'manifest', 'version-code', previous]).strip()
             device.launch()
+            if args.editor_qa_ime:
+                if args.p2p_peer_archive or args.previous_apk or args.identity_only or args.check_identity:
+                    raise RuntimeError('Run editor workload independently on the current signed APK')
+                from android_editor_fixture import editor_acceptance
+                report.update(mode='native-editor', notes=201)
+                editor_acceptance(device, args.editor_qa_ime.resolve(), report)
+                report.update(passed=True, seconds=round(time.monotonic() - started, 2))
+                report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n')
+                print(json.dumps(report, indent=2, ensure_ascii=False), flush=True)
+                return
+            if args.p2p_peer_archive:
+                if args.identity_only or args.check_identity:
+                    raise RuntimeError('Run P2P migration separately from the identity reinstall fixture')
+                from android_p2p_fixture import p2p_upgrade
+                report['toVersion'] = run([SDK / 'cmdline-tools/latest/bin/apkanalyzer', 'manifest', 'version-code', apk]).strip()
+                if int(report['toVersion']) <= int(report['fromVersion']):
+                    raise RuntimeError('P2P migration must increase the Android version code')
+                p2p_upgrade(device, args.p2p_peer_archive.resolve(), previous, apk, report)
+                report.update(passed=True, seconds=round(time.monotonic() - started, 2))
+                report_path.write_text(json.dumps(report, indent=2) + '\n')
+                print(json.dumps(report, indent=2), flush=True)
+                return
             if args.identity_only or args.check_identity:
                 # Density is outside the Activity's handled configChanges. Exercise
                 # permission launchers after a real Activity recreation, without a window.
@@ -280,6 +317,10 @@ def main():
             print(json.dumps(report, indent=2), flush=True)
     except Exception as error:
         report.update(error=str(error), seconds=round(time.monotonic() - started, 2))
+        try:
+            (output / 'android-last-ui.json').write_text(json.dumps(device.tree(), indent=2, ensure_ascii=False) + '\n')
+        except Exception:
+            pass
         report_path.write_text(json.dumps(report, indent=2) + '\n')
         raise
     finally:

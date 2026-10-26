@@ -60,3 +60,31 @@ python3 scripts/test-android-headless.py --check-identity --previous-apk /path/t
 成功或失败写入 `release/qa/android-headless.json`，结束后关闭并删除本轮 AVD；不使用既有 AVD，不覆盖真实设备上的 debug 安装。最终签名包的含身份组合检查约 209 秒。它不替代中文输入法、相机、真实 P2P 交换、通知后台或耗电验收。
 
 `npm run android:release:collect` 现在先使用 Python 3 比较两份 APK 和 AAB 中的 Rust/Syncthing 库与当前编译结果，共 8 份载荷；发现旧库时停止收集，保留此前收集目录。Windows 可通过 `SLIGHT_PYTHON` 指定 Python 3 可执行文件。Gradle 在读取共享 JNI 目录前完成所有已配置 ABI，并声明 Cargo 输出，避免缓存打入旧库。
+
+## 签名 Android 真实 P2P 与编辑器用例
+
+先准备当前版本的签名 ARM64 APK。默认路径跟随 `package.json` 的版本；本轮 0.1.1 使用已校验并保存的 `release/android/0.1.1/s-light-notes-0.1.1-arm64-v8a.apk`。
+
+```sh
+# 固定 v2.1.2 官方 Linux ARM64 归档；脚本会验证 SHA-256，拒绝其他文件。
+python3 scripts/test-android-headless.py \
+  --previous-apk release/android/0.1.0/s-light-notes-0.1.0-arm64-v8a.apk \
+  --p2p-peer-archive /path/to/syncthing-linux-arm64-v2.1.2.tar.gz
+# 独立测试包不进入产品 APK；只安装到本轮创建的临时 AVD。
+python3 scripts/build-android-qa-ime.py
+python3 scripts/test-android-headless.py --editor-qa-ime release/qa/slight-qa-ime.apk
+```
+
+归档来源为 [固定的官方发行](https://github.com/syncthing/syncthing/releases/tag/v2.1.2)，SHA-256 `2fcee9688f37df46337b0b78e7d2badc44549481e29eccaa8cdb1e698d79c8c5`，已与官方摘要清单匹配。构建对端镜像时只复制该二进制和测试启动器，不复制项目目录。Docker 对端上限 1 CPU/256 MiB，无宿主机挂载，数据放在 tmpfs，API 与传输端口仅映射宿主机 loopback。测试通过 Android 模拟器的宿主别名连接这些端口，不使用公共发现、中继、NAT 或报告服务。临时 AVD 使用可 root 的 Google APIs 镜像，仅从自己的临时安装中读取 API Key 和公开证书进行迁移核对；不访问已有设备或身份，报告不打印 API Key。
+
+P2P 用例只创建两条初始笔记，使用 Android UI 配对、编辑和停止引擎；控制 API 只用于设置隔离地址、触发扫描和验证配置。报告 `android-p2p-upgrade.json` 区分文件传输、设备码、证书、文件夹与配对迁移。它不代表两台桌面安装包 UI 验收。
+
+编辑器用例通过测试输入法的真实 Android InputConnection 发送组合与提交事件，确认半成品未落盘；再使用 200 个生成的原生 Markdown 文件和约 32 KB 长笔记，检查搜索和编辑后内容一致。耗时包括 ADB/UI Automator 开销，不是渲染帧时间，也不能替代厂商输入法、物理键盘或低端手机性能。报告为 `android-editor.json`。两类用例顺序执行，结束后移除自己的容器并删除 AVD。
+
+## 远端安装版的定向重跑
+
+`desktop-validation.yml` 手动运行默认只选择 Windows/Linux，Mac 环境仍须按测试约束事先征求同意。Linux 图形会话在远端虚拟机内的 Xvfb/Openbox 中运行；Windows 输入、剪贴板与测试窗口仅存在于一次性远端 VM。
+
+构建完成即收集并保留安装包，即使后续 UI 检查失败也保留摘要。只改测试脚本时可指定 `package_run` 复用原安装包；流程先核对原运行提交与当前 `app`、`src-tauri`、npm 元数据没有差异，再逐文件验证 SHA256SUMS。产品代码变化不得复用这一路径。原生编辑、便签、真正的窗口置顶、从另一客体应用触发全局快捷键及正常退出均分别记录。
+
+Windows 缓存恢复检查仅在该一次性 VM 中，通过临时 loopback 调试端口设置真实的旧 Service Worker、CacheStorage、localStorage/IndexedDB 哨兵，再重载验证原生初始化和数据保留。不会写入发行配置；环境变量用法依据 [Microsoft WebView2 调试文档](https://learn.microsoft.com/en-us/microsoft-edge/webview2/how-to/debug-visual-studio-code)。

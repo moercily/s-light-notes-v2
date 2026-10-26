@@ -46,7 +46,7 @@ release. Losing them prevents future signed upgrades.
 ## Current Alpha Boundary
 
 - Desktop Markdown create, edit, save, trash, restore, and permanent deletion are implemented.
-- Current development version is `0.1.0` (published release remains `0.0.1`): major features, minor features, then
+- Current development version is `0.1.1` (published release remains `0.0.1`): major features, minor features, then
   functional adjustments/bug fixes/optimization.
 - Desktop settings use **通用 / 便签设置 / 同步设置 / 关于**. General includes
   optional login startup; sticky settings record a key combination followed by
@@ -83,3 +83,5 @@ offline recovery, conflict, identity and shutdown tests. This does not replace t
 UI acceptance. The native desktop CI matrix builds macOS arm64/Intel, Windows x64
 and Linux x64 installers with checksums. See the [release checklist](docs/V2_RELEASE_CHECKLIST.md)
 and [current plan](docs/V2_DEVELOPMENT_PLAN.md) for remaining release gates.
+
+Automatic updates are outside the development scope. Use manually downloaded installers after backing up data. Release preparation materials are in [the 0.1.1 package](docs/RELEASE_MATERIALS_0.1.1.md); its privacy statement remains a draft until publisher and channel details are confirmed.
