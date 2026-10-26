@@ -9,7 +9,7 @@ on:
         description: Native platforms to validate (no local windows)
         type: choice
         default: windows-linux
-        options: [windows-linux, all]
+        options: [windows-linux, windows, linux, all]
       package_run:
         description: Optional successful packaging run ID to reuse installers for test-script-only changes
         type: string
@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.platforms == 'windows-linux' && '[{"runner":"windows-2022","target":"x86_64-pc-windows-msvc","bundles":"nsis"},{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","bundles":"deb,appimage"}]' || '[{"runner":"macos-15","target":"aarch64-apple-darwin","bundles":"app,dmg"},{"runner":"macos-15-intel","target":"x86_64-apple-darwin","bundles":"app,dmg"},{"runner":"windows-2022","target":"x86_64-pc-windows-msvc","bundles":"nsis"},{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","bundles":"deb,appimage"}]') }}
+        include: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.platforms == 'windows' && '[{"runner":"windows-2022","target":"x86_64-pc-windows-msvc","bundles":"nsis"}]' || github.event_name == 'workflow_dispatch' && inputs.platforms == 'linux' && '[{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","bundles":"deb,appimage"}]' || github.event_name == 'workflow_dispatch' && inputs.platforms == 'windows-linux' && '[{"runner":"windows-2022","target":"x86_64-pc-windows-msvc","bundles":"nsis"},{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","bundles":"deb,appimage"}]' || '[{"runner":"macos-15","target":"aarch64-apple-darwin","bundles":"app,dmg"},{"runner":"macos-15-intel","target":"x86_64-apple-darwin","bundles":"app,dmg"},{"runner":"windows-2022","target":"x86_64-pc-windows-msvc","bundles":"nsis"},{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","bundles":"deb,appimage"}]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     env:

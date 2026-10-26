@@ -15,6 +15,7 @@ public class SlightWindow {
     [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int index);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
 }
 '@
 function Find-Control($root, $id) {
@@ -142,9 +143,11 @@ try {
     Wait-Until 'the shortcut sticky closing' {
         ![SlightWindow]::IsWindow($shortcutHandle)
     } | Out-Null
-    [SlightWindow]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle) | Out-Null
-    $editor.SetFocus()
-    [Windows.Forms.SendKeys]::SendWait('%{F4}')
+    # Deliver the OS close request without depending on Windows foreground-lock policy.
+    # WM_CLOSE still runs the application's save/engine shutdown barrier.
+    if (![SlightWindow]::PostMessage([IntPtr]$window.Current.NativeWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)) {
+        throw 'Cannot send the native close request.'
+    }
     if (!$app.WaitForExit(15000)) { throw 'The app did not finish a normal close.' }
     Wait-Until 'managed engine shutdown' {
         !(Get-NetTCPConnection -State Listen -LocalPort 8385 -ErrorAction SilentlyContinue)
