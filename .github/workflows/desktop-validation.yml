@@ -60,6 +60,13 @@ jobs:
         run: npm run test:p2p
       - name: Package native application
         run: npm run tauri:build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --ci -- --locked
+      - name: Windows installed application smoke test
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $installers = @(Get-ChildItem 'src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe')
+          if ($installers.Count -ne 1) { throw 'Expected one NSIS installer.' }
+          ./scripts/test-windows-startup.ps1 -Installer $installers[0].FullName
       - name: Verify macOS bundle signature and architecture
         if: runner.os == 'macOS'
         run: node scripts/verify-macos-bundle.mjs "src-tauri/target/${{ matrix.target }}/release/bundle/macos/s-light notes.app"

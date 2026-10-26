@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/structure.test.mjs && node tests/desktop-service.test.mjs && node tests/mobile-storage-service.test.mjs && node tests/android-sync-service.test.mjs && node tests/desktop-storage.test.mjs && node tests/sync-service.test.mjs && node tests/sync-center.test.mjs && node tests/desktop-editing.test.mjs && node tests/settings.test.mjs && node tests/editor.test.mjs && node tests/reliability.test.mjs",
+    "test": "node tests/structure.test.mjs && node tests/desktop-service.test.mjs && node tests/mobile-storage-service.test.mjs && node tests/android-sync-service.test.mjs && node tests/desktop-storage.test.mjs && node tests/sync-service.test.mjs && node tests/sync-center.test.mjs && node tests/desktop-editing.test.mjs && node tests/settings.test.mjs && node tests/editor.test.mjs && node tests/reliability.test.mjs && node tests/native-shell.test.mjs",
     "version": "node scripts/sync-version.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

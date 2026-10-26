@@ -2357,12 +2357,22 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(SyncthingProcess::default())
         .manage(SyncthingSidecar::default())
         .manage(PendingFolderConfigs::default())
         .manage(PendingDevicePairings::default())
         .manage(NoteWrites::default())
         .manage(sticky::StickyState::default())
+        .on_page_load(|webview, payload| {
+            let url = payload.url();
+            let bundled = (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
+                || (matches!(url.scheme(), "http" | "https")
+                    && url.host_str() == Some("tauri.localhost"));
+            if bundled && payload.event() == tauri::webview::PageLoadEvent::Finished {
+                let _ = webview.eval(include_str!("desktop/native-shell-recovery.js"));
+            }
+        })
         .setup(|app| {
             sticky::setup(app)?;
             let handle = app.handle().clone();

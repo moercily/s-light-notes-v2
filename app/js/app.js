@@ -426,6 +426,9 @@ function updateThemeButton() {
 // ========== Service Worker 注册 ==========
 
 function registerSW() {
+    // Native assets ship with the executable. A cached PWA shell can outlive an
+    // upgrade and retain scripts from a different native command interface.
+    if (window.__TAURI_INTERNALS__ || window.__TAURI__) return;
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js')
             .then(reg => {

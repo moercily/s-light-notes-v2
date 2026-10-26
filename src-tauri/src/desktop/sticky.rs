@@ -110,8 +110,6 @@ fn parse_shortcut(value: &str) -> Result<Shortcut, String> {
 }
 
 pub(super) fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    app.handle()
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())?;
     let mut settings = match settings_path(app.handle()).ok().filter(|p| p.exists()) {
         Some(path) => match fs::read(path)
             .ok()
