@@ -13,6 +13,7 @@ using System;
 using System.Runtime.InteropServices;
 public class SlightWindow {
     [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int index);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
 }
 '@
 function Find-Control($root, $id) {
@@ -45,6 +46,15 @@ $installDir = Join-Path $env:RUNNER_TEMP 'slight-windows-startup'
 if (Test-Path $installDir) { throw 'The isolated install directory already exists.' }
 $setup = Start-Process -FilePath (Resolve-Path $Installer) -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
 if ($setup.ExitCode -ne 0) { throw "Installer failed: $($setup.ExitCode)" }
+$settingsDirectory = Join-Path $env:APPDATA 'com.slightnotes.v2'
+[IO.Directory]::CreateDirectory($settingsDirectory) | Out-Null
+$settingsPath = Join-Path $settingsDirectory 'sticky-settings.json'
+if (Test-Path $settingsPath) { throw 'Refusing to overwrite pre-existing sticky settings.' }
+[IO.File]::WriteAllText($settingsPath, '{"shortcut":"Control+Alt+N","placements":{}}')
+$qaDirectory = Join-Path (Get-Location) 'release/qa'
+[IO.Directory]::CreateDirectory($qaDirectory) | Out-Null
+$report = @{ passed = $false; environment = 'Disposable Windows CI VM; installed NSIS; UI Automation' }
+$other = $null
 $app = Start-Process -FilePath (Join-Path $installDir 's-light-notes.exe') -WindowStyle Normal -PassThru
 try {
     $window = Wait-Until 'the application window' {
@@ -74,6 +84,9 @@ try {
         $windows = [Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $condition)
         foreach ($candidate in $windows) { if (Find-Control $candidate 'sticky-pin') { return $candidate } }
     }
+    Wait-Until 'the existing note loading in the sticky editor' {
+        (Find-Control $sticky 'status-save').Current.Name -eq '已加载'
+    } | Out-Null
     Click-Control $sticky 'sticky-pin'
     Wait-Until 'the sticky HWND becoming topmost' {
         ([SlightWindow]::GetWindowLong([IntPtr]$sticky.Current.NativeWindowHandle, -20) -band 8) -ne 0
@@ -95,13 +108,39 @@ try {
     Wait-Until 'the sticky window closing' {
         try { $null = $sticky.Current.Name; return $false } catch { return $true }
     } | Out-Null
+    # A separate guest application owns focus while the OS dispatches the binding.
+    $other = Start-Process notepad.exe -PassThru
+    Wait-Until 'the other guest application window' { $other.Refresh(); $other.MainWindowHandle -ne 0 } | Out-Null
+    [SlightWindow]::SetForegroundWindow($other.MainWindowHandle) | Out-Null
+    [Windows.Forms.SendKeys]::SendWait('^%n')
+    $shortcutSticky = Wait-Until 'the global shortcut creating a sticky from another app' {
+        $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ProcessIdProperty, $app.Id)
+        $windows = [Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $condition)
+        foreach ($candidate in $windows) { if (Find-Control $candidate 'sticky-pin') { return $candidate } }
+    }
+    Wait-Until 'the new shortcut sticky initialization' {
+        (Find-Control $shortcutSticky 'status-save').Current.Name -eq '自动保存'
+    } | Out-Null
+    Click-Control $shortcutSticky 'sticky-close'
+    Wait-Until 'the shortcut sticky closing' {
+        try { $null = $shortcutSticky.Current.Name; return $false } catch { return $true }
+    } | Out-Null
+    [SlightWindow]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle) | Out-Null
     $editor.SetFocus()
     [Windows.Forms.SendKeys]::SendWait('%{F4}')
     if (!$app.WaitForExit(15000)) { throw 'The app did not finish a normal close.' }
     Wait-Until 'managed engine shutdown' {
         !(Get-NetTCPConnection -State Listen -LocalPort 8385 -ErrorAction SilentlyContinue)
     } | Out-Null
-    Write-Output 'Windows installed app: native storage, engine, editor save, sticky edit, native topmost toggle and normal close passed.'
+    $report.passed = $true
+    $report.checks = @('native storage', 'engine', 'editor save', 'sticky edit', 'native topmost toggle', 'global shortcut from Notepad', 'normal close and engine stop')
+    Write-Output 'Windows installed app: storage, editor, sticky, topmost, global shortcut and shutdown passed.'
+} catch {
+    $report.error = $_.Exception.Message
+    $report.location = $_.ScriptStackTrace
+    throw
 } finally {
     if (!$app.HasExited) { & taskkill.exe /T /F /PID $app.Id | Out-Null }
+    if ($other -and !$other.HasExited) { Stop-Process -Id $other.Id -Force }
+    $report | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 (Join-Path $qaDirectory 'windows-installed.json')
 }

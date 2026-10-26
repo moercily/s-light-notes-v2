@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
+import socket
 import subprocess
 import tempfile
 import time
@@ -69,6 +71,7 @@ report_path.parent.mkdir(parents=True, exist_ok=True)
 report = {'passed': False, 'environment': 'installed deb, Xvfb, AT-SPI, Openbox'}
 started = time.monotonic()
 app = None
+other = None
 wm = subprocess.Popen(['openbox'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:
     with tempfile.TemporaryDirectory(prefix='slight-linux-ui-') as root:
@@ -76,10 +79,13 @@ try:
         (home / 'Documents').mkdir()
         (home / '.config').mkdir()
         (home / '.config/user-dirs.dirs').write_text('XDG_DOCUMENTS_DIR="$HOME/Documents"\n')
+        config = home / '.config/com.slightnotes.v2'
+        config.mkdir()
+        (config / 'sticky-settings.json').write_text('{"shortcut":"Control+Alt+N","placements":{}}')
         env = {**os.environ, 'HOME': root, 'XDG_CONFIG_HOME': str(home / '.config'),
             'XDG_DATA_HOME': str(home / '.local/share'), 'NO_AT_BRIDGE': '0', 'GTK_MODULES': 'gail:atk-bridge'}
         with (home / 'runtime.log').open('w') as log:
-            app = subprocess.Popen([binary], env=env, stdout=log, stderr=log)
+            app = subprocess.Popen([binary], env=env, stdout=log, stderr=log, start_new_session=True)
             until(lambda: find('在便签中打开'), 'native initialization')
             click('+ 新建笔记')
             text = 'QA-Linux-installed'
@@ -92,6 +98,7 @@ try:
             until(lambda: saved(text), 'editor save')
             click('在便签中打开')
             until(lambda: find('置顶'), 'sticky window')
+            until(lambda: find('status-save').queryText().getText(0, -1) == '已加载', 'sticky note initialization')
             click('置顶')
             until(topmost, 'native ABOVE window state')
             click('取消置顶')
@@ -105,14 +112,33 @@ try:
             until(lambda: saved(text + ' sticky-edited'), 'sticky save')
             click('保存并关闭')
             until(lambda: not find('便签正文'), 'sticky closes')
+            other = subprocess.Popen(['xmessage', '-title', 'QA-Shortcut-OtherApp', '-buttons', 'OK', 'Isolated shortcut check'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            def other_window():
+                result = subprocess.run(['xdotool', 'search', '--name', '^QA-Shortcut-OtherApp$'], capture_output=True, text=True)
+                return result.stdout.strip() if result.returncode == 0 else None
+            wid = until(other_window, 'separate guest application')
+            subprocess.run(['xdotool', 'windowactivate', '--sync', wid], check=True)
+            subprocess.run(['xdotool', 'key', '--clearmodifiers', 'ctrl+alt+n'], check=True)
+            until(lambda: find('便签正文'), 'global shortcut from another application')
+            until(lambda: find('status-save').queryText().getText(0, -1) == '自动保存', 'new sticky initialization')
+            click('保存并关闭')
+            until(lambda: not find('便签正文'), 'shortcut sticky closes')
             editor = until(lambda: find('note-editor'), 'main editor')
             editor.queryComponent().grabFocus()
             subprocess.run(['xdotool', 'key', '--clearmodifiers', 'alt+F4'], check=True)
             app.wait(timeout=15)
             if app.returncode:
                 raise RuntimeError('Application exit code: ' + str(app.returncode))
+            def engine_stopped():
+                try:
+                    with socket.create_connection(('127.0.0.1', 8385), timeout=0.3):
+                        return False
+                except OSError:
+                    return True
+            until(engine_stopped, 'managed engine shutdown')
             report.update(passed=True, checks=['native initialization', 'editor save', 'sticky edit',
-                'native topmost toggle', 'normal close'])
+                'native topmost toggle', 'global shortcut from another app', 'normal close and engine stop'])
 except Exception as error:
     report['error'] = str(error)
     # Keep only accessible labels/roles from the isolated fixture for CI diagnostics.
@@ -124,12 +150,15 @@ except Exception as error:
     raise
 finally:
     if app is not None and app.poll() is None:
-        app.terminate()
+        os.killpg(app.pid, signal.SIGTERM)
         try:
             app.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            app.kill()
+            os.killpg(app.pid, signal.SIGKILL)
             app.wait()
+    if other is not None:
+        other.terminate()
+        other.wait(timeout=5)
     wm.terminate()
     wm.wait(timeout=5)
     report['seconds'] = round(time.monotonic() - started, 2)
