@@ -2,7 +2,7 @@
 
 ## 最新执行记录 — 2026-10-26 / 0.1.0
 
-- 产品代码 `50b5877` 的主分支原生 CI [40262430857](https://github.com/moercily/s-light-notes-v2/actions/runs/40262430857) 四个平台全部完成并成功；此前同提交的分支运行 `40261312065` 也成功。每个平台通过 12 组前端、38 项 Rust、双引擎和打包检查。
+- 桌面上次完整矩阵基线 `50b5877` 的主分支原生 CI [40262430857](https://github.com/moercily/s-light-notes-v2/actions/runs/40262430857) 四个平台全部完成并成功；此前同提交的分支运行 `40261312065` 也成功。每个平台通过 12 组前端、38 项 Rust、双引擎和打包检查。后续 Android 定向修复没有重复这套桌面矩阵。
 - Windows 原生运行器新增一次性安装、原生存储初始化、UI Automation 新建/保存并核对 Markdown、正常退出并检查引擎停止的检查，已通过。此范围不等于既有 Windows 用户配置迁移、便签或物理快捷键验收。
 - 修复全局快捷键插件的初始化顺序，并在原生壳恢复自身旧 PWA Service Worker/CacheStorage；恢复脚本保留 localStorage、IndexedDB、笔记和设备身份，有针对性回归。
 - 本轮政策变更前，Mac 新包严格签名校验、加载 10 个原有笔记、空便签打开/关闭和正常退出通过。用户要求停止宿主机窗口测试后，不再新增 Mac 真机验收。
@@ -12,6 +12,19 @@
 - 无界面 QEMU 11.1.2 / Colima 0.10.3 / ARM64 Linux / Docker 下，默认 3 组相关测试全部通过，测试执行 0.34 秒；首次上下文 461 KB、npm 安装约 1 秒（不含首次虚拟机及 Node 镜像下载）。资源边界见 [HEADLESS_TESTING.md](HEADLESS_TESTING.md)，此结果不能替代原生图形验收。
 - 按单组选择 `native-shell` 通过，执行 0.02 秒，整条命令约 0.94 秒；基础镜像摘要及 npm 依赖缓存命中。测试容器退出即清理，当前 Docker context 保持 `desktop-linux`。
 - QEMU 停止后再次启动约 9 秒，Docker 镜像缓存保留；随后单独执行设置/版本检查通过，执行 0.03 秒、整条命令约 0.96 秒。验证后再次停止本轮 QEMU，保留磁盘与镜像缓存供后续使用。
+
+### Android 签名版原生修复与无窗口验收
+
+- 原签名包首次启动正常，但实际编辑保存失败。一次性、同签名的客体内诊断确认 `mobile_storage_ensure not allowed by ACL`，而不是文件内容损坏；诊断辅助包未进入发行目录。
+- `build.rs` 和 Android capability 现在覆盖全部 21 个 Android 命令。移动端在存储就绪前禁止新建，初始化失败显示明确提示，不转存浏览器。新增授权覆盖检查，并验证失败与异步初始化时的界面屏障。
+- 针对性 Docker 检查 `android-permissions reliability mobile-storage-service` 三组通过，0.38 秒；随后新增的网络规则检查单组通过，0.31 秒。`npm test` 已接入第 13 组 Android 检查，本轮没有重复全部 13 组或桌面 Rust 测试。
+- 实际发现 x86-64 APK 夹带上次编译的 Rust 库。原因是 Gradle 在另一个 ABI 的 Cargo 任务完成前已缓存共享 JNI 目录；现声明输出并让各变体等待已配置 ABI 构建。收集前的 8 份原生载荷比较先拒绝旧 APK，修复后全部匹配当前 Rust/Syncthing 文件。
+- 签名版禁止 HTTP 时也阻止了本机控制接口，导致启动超时。按 [Android 网络安全配置](https://developer.android.com/privacy-and-security/security-config)仅允许 `127.0.0.1` 的明文访问；其他地址仍默认禁止，debug 资源保留原有开发服务器行为。增加启动前校验，启动失败或取消时清理本次子进程。
+- Activity 重建会使插件构造时保留的权限 launcher 失效。权限及扫码入口改用当前 Activity 的弱引用；局域网和通知请求启动失败时释放待处理请求。无窗口用例主动改变客体密度重建 Activity 后，附近设备授权及引擎启动、停止通过。
+- 最终 arm64 签名 APK SHA-256 `10556eafb25e753f8ae1cd0411d9febde86173e512f7f1eb910cc251f19d6fc7`。在独立 API 36 ARM64 QEMU 中关闭 Wi-Fi/移动数据后，通过当前版本引擎启动/停止、停止后无进程残留、同签名重装后界面设备码一致；不读取私钥或 API Key。
+- 同一轮的独立笔记用例从历史 `2.0.0-alpha.0`（版本码 `2000000`）升级到 `0.1.0`（`2000002`）：两条 ASCII 笔记的保存、重开、回收站保留、更新后修改、恢复和冷启动均通过。整轮 208.62 秒，报告在 `release/qa/android-headless.json`。身份比较是当前版本同签名重装，未宣称旧版到新版的身份或配对迁移通过。
+- 最新 x86-64 APK SHA-256 `daf33123f25e000cfbabe9ced6b49aea6d9c7500bc1cdc7d3d8081154efb8fff`；通用 AAB `a446487cd076ab7c9e54ce36e0ca984896bff9d4dd37d95f060931155a083e1e`。构建、原生载荷、签名和清单校验单独记录，x86-64 运行仍未验收。
+- 本轮只在 Docker/无窗口 QEMU 中运行测试；没有使用 Parallels 或 Mac 真机界面。所有本轮 AVD 已删除，既有 `slight-notes-api36` 保留；Colima 已停止。签名身份机外备份、真实 P2P、完整真机/中文输入法/通知/耗电、跨版本身份绑定、商店与发行签名门槛仍待完成，不启用更新器，不创建公开发布。
 
 ## 上次完整执行记录 — 2026-10-25 / 0.1.0
 

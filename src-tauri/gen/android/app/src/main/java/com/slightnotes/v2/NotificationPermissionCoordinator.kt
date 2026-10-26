@@ -24,7 +24,14 @@ object NotificationPermissionCoordinator {
             }
             pending = invoke
         }
-        activity.runOnUiThread(activity::launchNotificationPermissionRequest)
+        activity.runOnUiThread {
+            try {
+                activity.launchNotificationPermissionRequest()
+            } catch (_: Exception) {
+                val request = synchronized(lock) { pending.also { pending = null } }
+                request?.reject("无法打开通知权限请求，请重新打开应用后重试。")
+            }
+        }
     }
 
     fun complete(granted: Boolean) {

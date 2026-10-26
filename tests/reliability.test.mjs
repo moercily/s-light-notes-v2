@@ -9,7 +9,7 @@ function mobileFixture() {
     w.eval(readFileSync('app/js/utils.js', 'utf8'));
     w.eval(readFileSync('app/js/editor.js', 'utf8'));
     w.eval(readFileSync('app/js/mobile.js', 'utf8').replace(/document.addEventListener\('DOMContentLoaded',[\s\S]*$/, '') + '\nwindow.state = AppState;');
-    w.state.storageMode = 'android'; w.state._editSession = 1; w.state.isDirty = true;
+    w.state.storageMode = 'android'; w.state._storageReady = true; w.state._editSession = 1; w.state.isDirty = true;
     w.setEditorMarkdown(w.document.querySelector('#mobile-note-editor'), 'first');
     w.refreshMobileNotes = async () => {};
     return { dom, w, editor: w.document.querySelector('#mobile-note-editor') };
@@ -74,3 +74,34 @@ function mobileFixture() {
     dom.window.close();
 }
 console.log('mobile save serialization, failed navigation, IME and appearance tests passed');
+
+for (const fails of [true, false]) {
+    const { dom, w } = mobileFixture();
+    w.state.isDirty = false;
+    w.Appearance = { mount() {} };
+    for (const name of ['initMobileTheme', 'bindMobileEvents', 'initMobileViewport', 'initMobileNavigation', 'initMobileSyncEntry']) w[name] = () => {};
+    w.console.error = () => {};
+    let release;
+    w.mobileStorageService = { isAvailable: () => true, ensure: async () => {
+        if (fails) throw new Error('Command mobile_storage_ensure not allowed by ACL');
+    } };
+    w.initIDB = () => assert.fail('native initialization must not fall back to browser storage');
+    w.refreshMobileNotes = () => new Promise(resolve => { release = resolve; });
+    const opening = w.initMobileApp();
+    await tick();
+    assert.equal(w.document.querySelector('#mobile-new-note').disabled, true);
+    assert.equal(w.state._storageReady, false);
+    if (!fails) release();
+    await opening;
+    assert.equal(w.state._storageReady, !fails);
+    assert.equal(w.document.querySelector('#mobile-new-note').disabled, fails);
+    if (fails) {
+        assert.equal(w.state.storageMode, null);
+        assert.match(w.document.querySelector('#mobile-note-list [role="alert"]').textContent, /无法打开笔记存储/);
+        await w.onMobileNewNote();
+        assert.equal(w.state._view, 'list');
+        assert.equal(w.getMobileEditorContent(), 'first');
+    }
+    dom.window.close();
+}
+console.log('mobile storage initialization gate tests passed');

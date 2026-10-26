@@ -113,7 +113,7 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
 
     @Command
     fun scanDeviceQr(invoke: Invoke) {
-        val mainActivity = appActivity as? MainActivity
+        val mainActivity = MainActivity.currentActivity()
         if (mainActivity == null) {
             invoke.reject("当前 Android 页面无法启动二维码扫描。")
             return
@@ -139,7 +139,7 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
 
     @Command
     fun requestNotificationPermission(invoke: Invoke) {
-        val mainActivity = appActivity as? MainActivity
+        val mainActivity = MainActivity.currentActivity()
         if (mainActivity == null) {
             invoke.reject("当前 Android 页面无法请求通知权限。")
             return
@@ -149,7 +149,7 @@ class AndroidBridgePlugin(activity: Activity) : Plugin(activity) {
 
     @Command
     fun requestLocalNetworkPermission(invoke: Invoke) {
-        val mainActivity = appActivity as? MainActivity
+        val mainActivity = MainActivity.currentActivity()
         if (mainActivity == null) {
             invoke.reject("当前 Android 页面无法请求局域网权限。")
             return

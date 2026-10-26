@@ -7,6 +7,7 @@ const AppState = {
     currentNoteId: null,
     notes: [],
     storageMode: null,
+    _storageReady: false,
     folderHandle: null,
     isDirty: false,
     searchQuery: '',
@@ -22,6 +23,8 @@ const AppState = {
 };
 
 async function initMobileApp() {
+    AppState._storageReady = false;
+    $('#mobile-new-note').disabled = true;
     initMobileTheme();
     const preferences = document.createElement('section');
     preferences.className = 'mobile-appearance';
@@ -44,9 +47,19 @@ async function initMobileApp() {
         }
         initMobileSyncEntry();
         await refreshMobileNotes();
+        AppState._storageReady = true;
+        $('#mobile-new-note').disabled = false;
         setMobileSaveStatus('就绪');
     } catch (err) {
         console.error('移动端初始化失败:', err);
+        AppState.storageMode = null;
+        const message = '无法打开笔记存储，请重新打开应用后重试。';
+        const item = document.createElement('li');
+        item.className = 'mobile-empty';
+        item.setAttribute('role', 'alert');
+        item.textContent = message;
+        $('#mobile-note-list').replaceChildren(item);
+        $('#mobile-settings-note').textContent = message;
         setMobileSaveStatus('初始化失败');
     }
 }
@@ -559,6 +572,7 @@ async function openMobileNote(id) {
 }
 
 async function onMobileNewNote() {
+    if (!AppState._storageReady) return;
     const navigation = ++mobileNavigation;
     if (AppState.isDirty) await saveMobileCurrentNote();
     if (AppState.isDirty) return;

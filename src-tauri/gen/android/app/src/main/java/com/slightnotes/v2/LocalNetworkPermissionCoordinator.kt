@@ -19,7 +19,14 @@ object LocalNetworkPermissionCoordinator {
             }
             pending = invoke
         }
-        activity.runOnUiThread(activity::launchLocalNetworkPermissionRequest)
+        activity.runOnUiThread {
+            try {
+                activity.launchLocalNetworkPermissionRequest()
+            } catch (_: Exception) {
+                val request = synchronized(lock) { pending.also { pending = null } }
+                request?.reject("无法打开局域网权限请求，请重新打开应用后重试。")
+            }
+        }
     }
 
     fun complete(granted: Boolean) {

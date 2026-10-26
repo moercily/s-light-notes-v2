@@ -40,3 +40,23 @@ colima stop slight-qa
 - Windows 原生问题优先使用远端 Windows 运行器。确需本机 Parallels 或 Mac 真机时，先说明待验证内容并询问用户。
 - 后续 QEMU Android 使用 `-no-window -no-audio -no-snapshot`，独立 AVD 和少量数据；没有必要时不启动 Android 模拟器。
 - Linux 图形验收如有必要，使用容器内 Xvfb；画面与输入留在测试环境，不能弹出宿主机窗口。当前入口尚不执行原生图形验收。
+
+## Android 签名版的小规模原生检查
+
+已有 Android SDK、API 36 Google APIs ARM64 镜像、JDK 和签名 APK 时，可直接运行：
+
+```sh
+python3 scripts/test-android-headless.py
+# 已保留旧的同签名开发包时，检查旧版笔记与回收站升级
+python3 scripts/test-android-headless.py --previous-apk /path/to/older-signed-arm64.apk
+# 按需增加当前版本的引擎启动/停止、Activity 重建与身份重装检查
+python3 scripts/test-android-headless.py --check-identity --previous-apk /path/to/older-signed-arm64.apk
+```
+
+脚本创建自己的临时 AVD，固定 `-no-window -no-audio -no-snapshot`，2 CPU、480×960 分辨率，关闭客体 Wi-Fi 和移动数据。API 36 模拟器会把请求的 1536 MB 内存提高到最低 2560 MB，因此不同时运行其他模拟器。宿主机不打开窗口，也不接管键盘或剪贴板。SDK 通过 `ANDROID_HOME` 指定。
+
+只使用两条 ASCII 测试笔记，通过 Android UI Automator 的真实控件位置点击和 Android 输入事件验证本机保存、重开、移入回收站、安装新包、修改、恢复和冷启动。`--check-identity` 在独立的零笔记用例中先验证当前版本同签名重装后的界面设备码，再重置这一用例，开始旧版笔记升级用例；不将其记作旧版身份迁移通过。权限弹窗只存在于临时客体中，启动引擎时仅允许该客体的附近设备权限，不申请相机或通知权限。
+
+成功或失败写入 `release/qa/android-headless.json`，结束后关闭并删除本轮 AVD；不使用既有 AVD，不覆盖真实设备上的 debug 安装。最终签名包的含身份组合检查约 209 秒。它不替代中文输入法、相机、真实 P2P 交换、通知后台或耗电验收。
+
+`npm run android:release:collect` 现在先使用 Python 3 比较两份 APK 和 AAB 中的 Rust/Syncthing 库与当前编译结果，共 8 份载荷；发现旧库时停止收集，保留此前收集目录。Windows 可通过 `SLIGHT_PYTHON` 指定 Python 3 可执行文件。Gradle 在读取共享 JNI 目录前完成所有已配置 ABI，并声明 Cargo 输出，避免缓存打入旧库。

@@ -72,11 +72,17 @@ open class RustPlugin : Plugin<Project> {
                         rootDirRel = config.rootDirRel
                         target = targetName
                         release = profile == "release"
+                        // Cargo writes through these symlinks. Declare its output so Gradle
+                        // invalidates snapshots taken while another ABI was being packaged.
+                        outputs.dir(project.layout.projectDirectory.dir("src/main/jniLibs/${abiList[targetPair.index]}"))
+                        outputs.upToDateWhen { false } // Cargo owns source-level incremental builds.
                     }
 
                     buildTask.dependsOn(targetBuildTask)
+                    // AGP snapshots the shared jniLibs tree before applying ABI filters.
+                    // Build every configured ABI before any flavor snapshots that tree.
                     tasks["merge$targetArchCapitalized${profileCapitalized}JniLibFolders"].dependsOn(
-                        targetBuildTask
+                        buildTask
                     )
                 }
             }

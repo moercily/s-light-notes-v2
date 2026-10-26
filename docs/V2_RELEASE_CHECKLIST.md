@@ -10,6 +10,7 @@
 - `npm run test:p2p`：两个独立本地引擎的实际文件交换与冲突。
 - 对应操作系统运行 `desktop-validation.yml`，保存安装包和 `SHA256SUMS`。
 - Android：两种 ABI 单元测试、签名 APK/AAB 构建与签名校验。
+- 收集 Android 产物时校验包内原生库与当前编译结果一致；按改动需要运行 `scripts/test-android-headless.py` 的两条笔记用例，身份检查通过 `--check-identity` 单独启用。
 
 ## Markdown 备份与恢复
 

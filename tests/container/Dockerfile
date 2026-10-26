@@ -7,5 +7,10 @@ COPY tests ./tests
 COPY scripts/test-quick.mjs ./scripts/test-quick.mjs
 COPY src-tauri/src/desktop/native-shell-recovery.js ./src-tauri/src/desktop/native-shell-recovery.js
 COPY src-tauri/Cargo.toml src-tauri/tauri.conf.json src-tauri/tauri.android.conf.json ./src-tauri/
+COPY src-tauri/build.rs ./src-tauri/build.rs
+COPY src-tauri/src/android.rs ./src-tauri/src/android.rs
+COPY src-tauri/capabilities/android.json ./src-tauri/capabilities/android.json
+COPY src-tauri/gen/android/app/src/main/AndroidManifest.xml ./src-tauri/gen/android/app/src/main/AndroidManifest.xml
+COPY src-tauri/gen/android/app/src/main/res/xml/network_security_config.xml ./src-tauri/gen/android/app/src/main/res/xml/network_security_config.xml
 USER node
 ENTRYPOINT ["node", "scripts/test-quick.mjs"]

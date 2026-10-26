@@ -2,6 +2,7 @@ package com.slightnotes.v2
 
 import android.content.Context
 import android.os.SystemClock
+import android.security.NetworkSecurityPolicy
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -268,7 +269,11 @@ object SyncthingEngine {
     }
 
     private fun runEngine(context: Context) {
+        var startedChild: Process? = null
         try {
+            check(NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted("127.0.0.1")) {
+                "当前安装包无法访问本机同步引擎。"
+            }
             val runtime = ensureRuntime(context)
             val binary = requireNotNull(binaryFile(context)) { "安装包中缺少 Android 同步引擎。" }
             require(binary.isFile) { "安装包中的 Android 同步引擎不可用。" }
@@ -292,6 +297,7 @@ object SyncthingEngine {
                 redirectErrorStream(true)
                 redirectOutput(ProcessBuilder.Redirect.to(runtime.processLogFile))
             }.start()
+            startedChild = child
 
             synchronized(lock) { process = child }
             waitUntilReady(child)
@@ -318,6 +324,16 @@ object SyncthingEngine {
                 }
             }
         } catch (error: Exception) {
+            // Keep ownership until the child has stopped, including startup cancellation.
+            // A failed readiness check must not leave an untracked engine holding its port.
+            startedChild?.let { child ->
+                runCatching {
+                    if (child.isAlive) child.destroy()
+                    if (!child.waitFor(1, TimeUnit.SECONDS)) {
+                        child.destroyForcibly().waitFor(1, TimeUnit.SECONDS)
+                    }
+                }
+            }
             synchronized(lock) {
                 process = null
                 state = if (stopRequested) State.STOPPED else State.ERROR

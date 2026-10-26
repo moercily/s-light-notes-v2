@@ -6,8 +6,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import java.lang.ref.WeakReference
 
 class MainActivity : TauriActivity() {
+  companion object {
+    @Volatile private var current = WeakReference<MainActivity>(null)
+
+    // Tauri keeps plugins across Activity recreation; permission launchers do not.
+    fun currentActivity(): MainActivity? = current.get()?.takeUnless { it.isDestroyed || it.isFinishing }
+  }
+
   private val notificationPermission = registerForActivityResult(
     ActivityResultContracts.RequestPermission(),
   ) { granted ->
@@ -33,8 +41,14 @@ class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+    current = WeakReference(this)
     AndroidSyncPolicy.initialize(this)
     AndroidAppRuntime.initialize(this)
+  }
+
+  override fun onDestroy() {
+    if (current.get() === this) current.clear()
+    super.onDestroy()
   }
 
   fun launchDeviceQrScan() {

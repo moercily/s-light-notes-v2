@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(
@@ -58,6 +59,9 @@ const artifacts = [
   },
 ];
 
+// Validate before touching the previous collected artifacts.
+const python = process.env.SLIGHT_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+execFileSync(python, [join(projectRoot, 'scripts', 'verify-android-payloads.py')], { stdio: 'inherit' });
 rmSync(releaseDirectory, { recursive: true, force: true });
 mkdirSync(releaseDirectory, { recursive: true });
 
