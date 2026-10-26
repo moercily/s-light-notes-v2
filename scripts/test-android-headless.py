@@ -181,8 +181,8 @@ def main():
     started = time.monotonic()
     report = {'apkSha256': hashlib.sha256(apk.read_bytes()).hexdigest(),
         'previousApkSha256': hashlib.sha256(previous.read_bytes()).hexdigest(),
-        'mode': 'upgrade' if previous != apk else 'same-version-reinstall',
-        'notes': 0 if args.identity_only else 2, 'passed': False}
+        'mode': 'native-editor' if args.editor_qa_ime else 'upgrade' if previous != apk else 'same-version-reinstall',
+        'notes': 201 if args.editor_qa_ime else 0 if args.identity_only else 2, 'passed': False}
     output = ROOT / 'release/qa'
     output.mkdir(parents=True, exist_ok=True)
     report_path = output / ('android-editor.json' if args.editor_qa_ime else 'android-p2p-upgrade.json' if args.p2p_peer_archive else 'android-headless-identity.json' if args.identity_only else 'android-headless.json')

@@ -22,7 +22,9 @@ def editor_acceptance(device, ime_apk, report):
     device.adb('root')
     device.adb('wait-for-device')
     device.adb('install', '--no-incremental', str(ime_apk))
-    until(lambda: IME in device.adb('shell', 'ime', 'list', '-s'), 'test IME registration')
+    # Android's default list includes only enabled IMEs; a freshly installed one
+    # must be discovered in the complete list before it can be enabled.
+    until(lambda: IME in device.adb('shell', 'ime', 'list', '-a', '-s'), 'test IME registration')
     device.adb('shell', 'ime', 'enable', IME)
     device.adb('shell', 'ime', 'set', IME)
     title, body = 'QA-IME', 'Before composition'
@@ -73,20 +75,27 @@ def editor_acceptance(device, ime_apk, report):
     input_text(device, 'QA-SCALE-0198')
     device.note('QA-SCALE-0198')
     search = time.monotonic() - started
-    device.adb('shell', 'input', 'keyevent', '111')
     device.click('mobile-search')
-    # Ctrl+A and Backspace act only in the guest search input.
+    # Replace the query in the guest. Escape would clear an HTML search input.
     device.adb('shell', 'input', 'keycombination', '113', '29')
     input_text(device, 'QA-LONG')
-    device.adb('shell', 'input', 'keyevent', '111')
     device.tap(device.note('QA-LONG'))
     device.click('mobile-note-editor')
-    device.adb('shell', 'input', 'keyevent', '123')
+    device.adb('shell', 'input', 'keycombination', '113', '123')
     started = time.monotonic()
     input_text(device, ' 完成')
     device.click('mobile-back')
     long_path = PRIVATE + '/notes/qa-long.md'
-    until(lambda: device.adb('exec-out', 'cat', long_path) == source + ' 完成', 'long Markdown retains all untouched blocks')
+    try:
+        until(lambda: device.adb('exec-out', 'cat', long_path) == source + ' 完成', 'long Markdown retains all untouched blocks')
+    except Exception:
+        actual = device.adb('exec-out', 'cat', long_path)
+        first = next((index for index, (a, b) in enumerate(zip(source + ' 完成', actual)) if a != b), min(len(source), len(actual)))
+        report['longNoteDiagnostic'] = {'actualBytes': len(actual.encode()), 'expectedBytes': len((source + ' 完成').encode()),
+            'insertedAt': actual.find(' 完成'), 'firstDifference': first,
+            'expectedContext': (source + ' 完成')[max(0, first - 30):first + 80],
+            'actualContext': actual[max(0, first - 30):first + 80]}
+        raise
     save = time.monotonic() - started
     report['nativeEditorWorkload'] = {'files': 201, 'generatedScaleFiles': 200, 'longNoteBytes': len(source.encode()),
         'coldLaunchListSeconds': round(cold_list, 2), 'searchSeconds': round(search, 2),

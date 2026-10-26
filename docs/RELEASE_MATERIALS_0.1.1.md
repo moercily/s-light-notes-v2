@@ -27,6 +27,8 @@
 | 隐私政策 | `PRIVACY_DRAFT.md` | 补齐主体、联系渠道和正式 URL |
 | 开源许可 | `src-tauri/binaries/notices/` 与包内许可 | Syncthing MPL-2.0；确认渠道随包提供 |
 
+本轮实际保留的新版 Android 候选仅为 ARM64 APK，并已校验两份原生库与 v2/v3 签名；x86-64 APK 和 AAB 未重复构建，不能把旧版文件当作 0.1.1 产物。桌面安装包与通过范围见最终测试记录。
+
 Android 应用 ID：`com.slightnotes.v2`；候选版本：`0.1.1`；versionCode：`2000003`。既有公开发布和已安装用户数据均不由本材料流程改动。
 
 ## Android 签名身份备份与恢复操作单

@@ -1,6 +1,26 @@
 # s-light notes v2 Test Plan
 
-## 最新执行记录 — 2026-10-26 / 0.1.0
+## 最新执行记录 — 2026-10-26 / 0.1.1 / P0～P3
+
+本轮只在本地 Docker/无窗口 ARM64 QEMU 和远端一次性 Windows/Linux VM 中执行；没有使用本机 Mac 界面或 Parallels。用户确认 P3“只准备材料”。自动更新已移出开发目标；不新建公开发布。
+
+- **P0 通过**：`scripts/test-android-headless.py --previous-apk release/android/0.1.0/s-light-notes-0.1.0-arm64-v8a.apk --p2p-peer-archive /path/to/syncthing-linux-arm64-v2.1.2.tar.gz`。签名 Android 原生 UI 配对 ARM64 Docker 中的独立固定引擎，只有两条初始笔记；实际双向传输和界面编辑、离线竞争修改后保留两版本、Android 冲突列表可见、停止 Android 不影响对端均通过。
+- 签名原地升级 `2000002` → `2000003`（0.1.0 → 0.1.1）后，设备码、证书摘要、文件夹 ID/路径/设备列表和既有配对均保留；重连后继续传输通过。整轮 **218.31 秒**，完整报告在 `release/qa/android-p2p-upgrade.json`。与上次的“同版本重装身份”范围区分。
+- 0.1.1 ARM64 APK SHA-256：`3985036337395ec7dae2a87e1db92548628b2733cafa798c65c476b394409109`；实际 ZIP 只含 arm64-v8a 的 Rust 与 Syncthing 两个库，两者与当前编译结果一致。APK v2/v3 签名通过，证书仍为 `bde886bebb20114c53661299f4d40bb679acbe433bb476eb4ab5bf7977efaddd`。保留在 `release/android/0.1.1/`；本轮没有重复 x86-64/AAB 打包，不将旧 0.1.0 产物改名当作新版。
+- **P1 Linux 通过**：[40287800683 的 Linux job](https://github.com/moercily/s-light-notes-v2/actions/runs/40287800683) 在一次性 Ubuntu VM 的 Xvfb/Openbox 中安装 deb，验证原生初始化、Markdown 保存、便签编辑、真实 `_NET_WM_STATE_ABOVE` 切换、从另一客体应用触发全局快捷键、正常退出和引擎停止。该运行的 Windows job 仍失败，不能把整个运行写成成功。
+- **P1 Windows 通过**：[40288211756](https://github.com/moercily/s-light-notes-v2/actions/runs/40288211756) 单独 Windows job 成功。安装 NSIS 后验证真实旧 Service Worker/CacheStorage 恢复，同时保留 localStorage、IndexedDB 与无关缓存；原生初始化、保存、便签编辑、真实 HWND TOPMOST 切换、从 Notepad 触发全局快捷键、原生 WM_CLOSE 触发保存/退出屏障和引擎停止均通过。此结果不等于本机旧 Win10 用户配置已验收。
+- 两个平台复用 [40286079333](https://github.com/moercily/s-light-notes-v2/actions/runs/40286079333) 构建的 0.1.1 安装包。该构建运行的前端 **13 组**、Rust **38 项**、真实双引擎及打包通过，UI 检查当时失败；后续只修测试定位/焦点/依赖。复用前比较源提交与当前 `app`、`src-tauri`、npm 元数据，并核对 SHA256SUMS，避免重复编译。
+- 原始失败原因均保留于对应日志：Windows 切换按钮使用 TogglePattern；状态文字不能当作控件 Name；关闭使用原生窗口句柄，而不是 UIA 缓存对象是否失效；跨应用后需明确给目标窗口发送退出。Linux 安装 X11 检查工具并激活主窗口后退出。
+- 本地 Docker 的 `native-shell reliability editor` 三组通过，**1.02 秒**。另在无网络、无挂载容器中检查了发行摘要入口：合法含空格文件名通过，改动后的安装包和未列出的额外安装包均被拒绝。
+- **P2 通过**：`python3 scripts/test-android-headless.py --editor-qa-ime release/qa/slight-qa-ime.apk`，真实 Android WebView InputConnection 中文组合期间原 Markdown 不变，提交后保存并重开正确；200 个生成的原生 Markdown 文件加 1 条输入法笔记，共 201 个文件。24,697 字节长笔记的末尾编辑逐字保留所有原内容。完整报告 `release/qa/android-editor.json`，整轮 **101.18 秒**。观察到冷启动/列表 7.37 秒、搜索 2.15 秒、长笔记编辑保存 2.19 秒，均含 ADB/UI Automator 开销，不是渲染帧延迟，也不作为低端真机结论。
+- 编辑器夹具同时修正了输入法注册列表须包含尚未启用项、不能使用 Escape 清空 HTML 搜索框、不能点击屏幕外的零坐标控件和长文必须定位文档末尾等测试事件问题。没有为这些夹具问题改动产品编辑逻辑。
+- **P3 材料完成**：[发行材料包](RELEASE_MATERIALS_0.1.1.md)、[隐私草案](PRIVACY_DRAFT.md)。包含渠道文案、签名备份恢复、权限/网络和第三方诊断说明、真机/后台/耗电操作单。未执行机外备份、正式证书/公证、真机耗电或商店上传。
+
+测试夹具修正：模拟器在 Wi-Fi/移动数据关闭后仍有虚拟以太网；启用 Wi-Fi 会导致 10.0.2.15 → 10.0.2.16 切换、断开连接并触发拉取重试。本轮固定虚拟以太网，临时客体出站防火墙只允许 loopback 与 10.0.2.2，禁用对端公共发现/中继/NAT/报告服务。截图、键盘、剪贴板和窗口均留在客体或远端 VM。本轮临时 AVD 和容器已清理；Colima 在测试后停止，镜像缓存保留。
+
+覆盖边界：Android 厂商输入法/物理键盘、低端手机、真机通知/相机/耗电、两台桌面安装包互配、Mac 物理快捷键/真实登录、既有本机 Win10 配置、Android x86-64 运行和正式发行仍未由本轮证明。后续如需本机 Mac 或 Parallels，先询问用户。
+
+## 上次执行记录 — 2026-10-26 / 0.1.0
 
 - 桌面上次完整矩阵基线 `50b5877` 的主分支原生 CI [40262430857](https://github.com/moercily/s-light-notes-v2/actions/runs/40262430857) 四个平台全部完成并成功；此前同提交的分支运行 `40261312065` 也成功。每个平台通过 12 组前端、38 项 Rust、双引擎和打包检查。后续 Android 定向修复没有重复这套桌面矩阵。
 - Windows 原生运行器新增一次性安装、原生存储初始化、UI Automation 新建/保存并核对 Markdown、正常退出并检查引擎停止的检查，已通过。此范围不等于既有 Windows 用户配置迁移、便签或物理快捷键验收。

@@ -53,7 +53,7 @@ python3 scripts/test-android-headless.py --previous-apk /path/to/older-signed-ar
 python3 scripts/test-android-headless.py --check-identity --previous-apk /path/to/older-signed-arm64.apk
 ```
 
-脚本创建自己的临时 AVD，固定 `-no-window -no-audio -no-snapshot`，2 CPU、480×960 分辨率，关闭客体 Wi-Fi 和移动数据。API 36 模拟器会把请求的 1536 MB 内存提高到最低 2560 MB，因此不同时运行其他模拟器。宿主机不打开窗口，也不接管键盘或剪贴板。SDK 通过 `ANDROID_HOME` 指定。
+脚本创建自己的临时 AVD，固定 `-no-window -no-audio -no-snapshot`，2 CPU、480×960 分辨率，关闭客体 Wi-Fi 和移动数据。模拟器虚拟以太网仍可用，因此还在该临时客体中设置 IPv4/IPv6 出站规则，只允许 loopback 和模拟器宿主别名 `10.0.2.2`。不在传输中途启用 Wi-Fi，避免网卡地址切换造成连接重置及引擎重试等待。保持客体屏幕唤醒以免后台策略干扰前台用例；不打开宿主机窗口。API 36 模拟器会把请求的 1536 MB 内存提高到最低 2560 MB，因此不同时运行其他模拟器。宿主机不接管键盘或剪贴板。SDK 通过 `ANDROID_HOME` 指定。
 
 只使用两条 ASCII 测试笔记，通过 Android UI Automator 的真实控件位置点击和 Android 输入事件验证本机保存、重开、移入回收站、安装新包、修改、恢复和冷启动。`--check-identity` 在独立的零笔记用例中先验证当前版本同签名重装后的界面设备码，再重置这一用例，开始旧版笔记升级用例；不将其记作旧版身份迁移通过。权限弹窗只存在于临时客体中，启动引擎时仅允许该客体的附近设备权限，不申请相机或通知权限。
 
@@ -79,11 +79,11 @@ python3 scripts/test-android-headless.py --editor-qa-ime release/qa/slight-qa-im
 
 P2P 用例只创建两条初始笔记，使用 Android UI 配对、编辑和停止引擎；控制 API 只用于设置隔离地址、触发扫描和验证配置。报告 `android-p2p-upgrade.json` 区分文件传输、设备码、证书、文件夹与配对迁移。它不代表两台桌面安装包 UI 验收。
 
-编辑器用例通过测试输入法的真实 Android InputConnection 发送组合与提交事件，确认半成品未落盘；再使用 200 个生成的原生 Markdown 文件和约 32 KB 长笔记，检查搜索和编辑后内容一致。耗时包括 ADB/UI Automator 开销，不是渲染帧时间，也不能替代厂商输入法、物理键盘或低端手机性能。报告为 `android-editor.json`。两类用例顺序执行，结束后移除自己的容器并删除 AVD。
+编辑器用例通过测试输入法的真实 Android InputConnection 发送组合与提交事件，确认半成品未落盘；再使用 200 个生成的原生 Markdown 文件和约 24.7 KB 长笔记，检查搜索和编辑后内容一致。耗时包括 ADB/UI Automator 开销，不是渲染帧时间，也不能替代厂商输入法、物理键盘或低端手机性能。报告为 `android-editor.json`。两类用例顺序执行，结束后移除自己的容器并删除 AVD。
 
 ## 远端安装版的定向重跑
 
-`desktop-validation.yml` 手动运行默认只选择 Windows/Linux，Mac 环境仍须按测试约束事先征求同意。Linux 图形会话在远端虚拟机内的 Xvfb/Openbox 中运行；Windows 输入、剪贴板与测试窗口仅存在于一次性远端 VM。
+`desktop-validation.yml` push/PR 和手动运行默认只选择 Windows/Linux，手动还可只选择 Windows 或 Linux，Mac 环境仍须按测试约束事先征求同意。Linux 图形会话在远端虚拟机内的 Xvfb/Openbox 中运行；Windows 输入、剪贴板与测试窗口仅存在于一次性远端 VM。
 
 构建完成即收集并保留安装包，即使后续 UI 检查失败也保留摘要。只改测试脚本时可指定 `package_run` 复用原安装包；流程先核对原运行提交与当前 `app`、`src-tauri`、npm 元数据没有差异，再逐文件验证 SHA256SUMS。产品代码变化不得复用这一路径。原生编辑、便签、真正的窗口置顶、从另一客体应用触发全局快捷键及正常退出均分别记录。
 
