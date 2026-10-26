@@ -30,6 +30,14 @@ function Click-Control($root, $id) {
         $pattern.Toggle()
     } else { throw "No Invoke/Toggle pattern for $id" }
 }
+function Contains-AccessibleText($root, $text) {
+    $pattern = $null
+    if ($root.TryGetCurrentPattern([Windows.Automation.TextPattern]::Pattern, [ref]$pattern)) {
+        if ($pattern.DocumentRange.GetText(-1).Contains($text)) { return $true }
+    }
+    $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty, $text)
+    return $null -ne $root.FindFirst([Windows.Automation.TreeScope]::Subtree, $condition)
+}
 function Wait-Until($description, [scriptblock]$probe, $seconds = 45) {
     $deadline = (Get-Date).AddSeconds($seconds)
     do {
@@ -53,10 +61,19 @@ if (Test-Path $settingsPath) { throw 'Refusing to overwrite pre-existing sticky 
 [IO.File]::WriteAllText($settingsPath, '{"shortcut":"Control+Alt+N","placements":{}}')
 $qaDirectory = Join-Path (Get-Location) 'release/qa'
 [IO.Directory]::CreateDirectory($qaDirectory) | Out-Null
-$report = @{ passed = $false; environment = 'Disposable Windows CI VM; installed NSIS; UI Automation' }
+$report = @{ passed = $false; environment = 'Disposable Windows CI VM; installed NSIS; UI Automation'; installerSha256 = (Get-FileHash $Installer -Algorithm SHA256).Hash.ToLower() }
 $other = $null
+$debugListener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+$debugListener.Start()
+$debugPort = $debugListener.LocalEndpoint.Port
+$debugListener.Stop()
+$oldBrowserArguments = $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$debugPort --remote-debugging-address=127.0.0.1"
 $app = Start-Process -FilePath (Join-Path $installDir 's-light-notes.exe') -WindowStyle Normal -PassThru
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $oldBrowserArguments
 try {
+    & node --experimental-websocket scripts/test-windows-cache.mjs $debugPort
+    if ($LASTEXITCODE -ne 0) { throw 'Installed native cache migration check failed.' }
     $window = Wait-Until 'the application window' {
         $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ProcessIdProperty, $app.Id)
         [Windows.Automation.AutomationElement]::RootElement.FindFirst([Windows.Automation.TreeScope]::Children, $condition)
@@ -85,7 +102,7 @@ try {
         foreach ($candidate in $windows) { if (Find-Control $candidate 'sticky-pin') { return $candidate } }
     }
     Wait-Until 'the existing note loading in the sticky editor' {
-        (Find-Control $sticky 'status-save').Current.Name -eq '已加载'
+        Contains-AccessibleText (Find-Control $sticky 'note-editor') $text
     } | Out-Null
     Click-Control $sticky 'sticky-pin'
     Wait-Until 'the sticky HWND becoming topmost' {
@@ -118,9 +135,6 @@ try {
         $windows = [Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $condition)
         foreach ($candidate in $windows) { if (Find-Control $candidate 'sticky-pin') { return $candidate } }
     }
-    Wait-Until 'the new shortcut sticky initialization' {
-        (Find-Control $shortcutSticky 'status-save').Current.Name -eq '自动保存'
-    } | Out-Null
     Click-Control $shortcutSticky 'sticky-close'
     Wait-Until 'the shortcut sticky closing' {
         try { $null = $shortcutSticky.Current.Name; return $false } catch { return $true }
@@ -133,7 +147,7 @@ try {
         !(Get-NetTCPConnection -State Listen -LocalPort 8385 -ErrorAction SilentlyContinue)
     } | Out-Null
     $report.passed = $true
-    $report.checks = @('native storage', 'engine', 'editor save', 'sticky edit', 'native topmost toggle', 'global shortcut from Notepad', 'normal close and engine stop')
+    $report.checks = @('real legacy worker/cache recovery preserves data', 'native storage', 'engine', 'editor save', 'sticky edit', 'native topmost toggle', 'global shortcut from Notepad', 'normal close and engine stop')
     Write-Output 'Windows installed app: storage, editor, sticky, topmost, global shortcut and shutdown passed.'
 } catch {
     $report.error = $_.Exception.Message

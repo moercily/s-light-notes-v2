@@ -16,6 +16,7 @@ on:
         default: ''
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: desktop-validation-${{ github.ref }}
   cancel-in-progress: true
@@ -76,6 +77,10 @@ jobs:
           PACKAGE_RUN: ${{ inputs.package_run }}
         run: |
           [[ "$PACKAGE_RUN" =~ ^[0-9]+$ ]] || exit 1
+          source_sha=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PACKAGE_RUN" --jq .head_sha)
+          [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || exit 1
+          git fetch --no-tags --depth=1 origin "$source_sha"
+          git diff --exit-code "$source_sha" HEAD -- app src-tauri package.json package-lock.json
           gh run download "$PACKAGE_RUN" --repo "$GITHUB_REPOSITORY" --name desktop-${{ matrix.target }} --dir release/${{ matrix.target }}
           node scripts/verify-release-checksums.mjs release/${{ matrix.target }}
       - name: Windows installed application smoke test

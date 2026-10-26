@@ -40,13 +40,13 @@ def find(key, root=None):
             return node
 
 
-def sticky_ready(message):
+def sticky_ready(expected=None):
     node = find('便签正文')
     if not node:
         return False
-    while node.parent and node.getRoleName() != 'frame':
-        node = node.parent
-    return find(message, node)
+    if expected is None:
+        return node.getState().contains(pyatspi.STATE_EDITABLE)
+    return node.queryText().getText(0, -1).strip() == expected
 
 
 def click(key):
@@ -107,7 +107,7 @@ try:
             until(lambda: saved(text), 'editor save')
             click('在便签中打开')
             until(lambda: find('置顶'), 'sticky window')
-            until(lambda: sticky_ready('已加载'), 'sticky note initialization')
+            until(lambda: sticky_ready(text), 'sticky note initialization')
             click('置顶')
             until(topmost, 'native ABOVE window state')
             click('取消置顶')
@@ -130,7 +130,7 @@ try:
             subprocess.run(['xdotool', 'windowactivate', '--sync', wid], check=True)
             subprocess.run(['xdotool', 'key', '--clearmodifiers', 'ctrl+alt+n'], check=True)
             until(lambda: find('便签正文'), 'global shortcut from another application')
-            until(lambda: sticky_ready('自动保存'), 'new sticky initialization')
+            until(sticky_ready, 'new sticky initialization')
             click('保存并关闭')
             until(lambda: not find('便签正文'), 'shortcut sticky closes')
             editor = until(lambda: find('note-editor'), 'main editor')
