@@ -75,8 +75,11 @@ folder with a SHA-256 manifest; it excludes trash, application settings, and syn
 credentials. Font, size and line spacing are available in General settings and
 mobile settings, and apply to sticky windows too.
 
-Run `npm run test:p2p` for actual two-engine loopback transfer, offline recovery,
-conflict, identity and shutdown tests. This does not replace two-machine packaged
+For routine changes, run `npm run test:container` in the isolated headless
+Docker/QEMU environment; see [setup and focused checks](docs/HEADLESS_TESTING.md).
+Ask before using Parallels or a physical Mac for acceptance testing.
+The native CI runs `npm run test:p2p` for actual two-engine loopback transfer,
+offline recovery, conflict, identity and shutdown tests. This does not replace two-machine packaged
 UI acceptance. The native desktop CI matrix builds macOS arm64/Intel, Windows x64
 and Linux x64 installers with checksums. See the [release checklist](docs/V2_RELEASE_CHECKLIST.md)
 and [current plan](docs/V2_DEVELOPMENT_PLAN.md) for remaining release gates.

@@ -1,0 +1,16 @@
+**
+!package.json
+!package-lock.json
+!app/
+!app/**
+!tests/
+!tests/**
+!scripts/
+!scripts/test-quick.mjs
+!src-tauri/
+!src-tauri/Cargo.toml
+!src-tauri/tauri.conf.json
+!src-tauri/tauri.android.conf.json
+!src-tauri/src/
+!src-tauri/src/desktop/
+!src-tauri/src/desktop/native-shell-recovery.js

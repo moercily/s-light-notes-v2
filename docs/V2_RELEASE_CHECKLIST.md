@@ -4,6 +4,7 @@
 
 ## 自动化门槛
 
+- 日常改动先按 [无界面测试](HEADLESS_TESTING.md) 选择少量相关容器测试；下列完整门槛在发布或相关原生代码改动时执行。使用 Parallels 或 Mac 真机前先询问用户。
 - `npm ci && npm test`。
 - `cargo test --manifest-path src-tauri/Cargo.toml --locked --lib`。
 - `npm run test:p2p`：两个独立本地引擎的实际文件交换与冲突。
