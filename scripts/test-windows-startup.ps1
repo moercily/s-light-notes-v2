@@ -19,6 +19,16 @@ function Find-Control($root, $id) {
     $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
     $root.FindFirst([Windows.Automation.TreeScope]::Descendants, $condition)
 }
+function Click-Control($root, $id) {
+    $control = Find-Control $root $id
+    if (!$control) { throw "Missing UI control: $id" }
+    $pattern = $null
+    if ($control.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+        $pattern.Invoke()
+    } elseif ($control.TryGetCurrentPattern([Windows.Automation.TogglePattern]::Pattern, [ref]$pattern)) {
+        $pattern.Toggle()
+    } else { throw "No Invoke/Toggle pattern for $id" }
+}
 function Wait-Until($description, [scriptblock]$probe, $seconds = 45) {
     $deadline = (Get-Date).AddSeconds($seconds)
     do {
@@ -58,17 +68,17 @@ try {
     Wait-Until 'the saved Markdown' {
         (Test-Path $note) -and ([IO.File]::ReadAllText($note).Trim() -eq $text)
     } | Out-Null
-    (Find-Control $window 'btn-open-sticky').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Click-Control $window 'btn-open-sticky'
     $sticky = Wait-Until 'the native sticky window' {
         $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ProcessIdProperty, $app.Id)
         $windows = [Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $condition)
         foreach ($candidate in $windows) { if (Find-Control $candidate 'sticky-pin') { return $candidate } }
     }
-    (Find-Control $sticky 'sticky-pin').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Click-Control $sticky 'sticky-pin'
     Wait-Until 'the sticky HWND becoming topmost' {
         ([SlightWindow]::GetWindowLong([IntPtr]$sticky.Current.NativeWindowHandle, -20) -band 8) -ne 0
     } | Out-Null
-    (Find-Control $sticky 'sticky-pin').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Click-Control $sticky 'sticky-pin'
     Wait-Until 'the sticky HWND leaving topmost' {
         ([SlightWindow]::GetWindowLong([IntPtr]$sticky.Current.NativeWindowHandle, -20) -band 8) -eq 0
     } | Out-Null
@@ -81,7 +91,7 @@ try {
             [IO.File]::ReadAllText($_.FullName).Trim() -eq "$text sticky-edited"
         }).Count -eq 1
     } | Out-Null
-    (Find-Control $sticky 'sticky-close').GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Click-Control $sticky 'sticky-close'
     Wait-Until 'the sticky window closing' {
         try { $null = $sticky.Current.Name; return $false } catch { return $true }
     } | Out-Null
