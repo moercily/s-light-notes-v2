@@ -16,6 +16,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 mod settings;
 mod sticky;
 mod transfer;
+mod sync_proxy;
 
 #[derive(Default)]
 struct NoteWrites(Mutex<()>);
@@ -1055,17 +1056,24 @@ fn syncthing_proxy_request(
     sidecar: State<'_, SyncthingSidecar>,
 ) -> Result<ProxyResponse, String> {
     let method = request.method.to_uppercase();
-    if method != "GET" && method != "POST" {
-        return Err("暂不支持该 Syncthing 请求方法。".to_string());
-    }
+    let managed = !use_external_override();
+    sync_proxy::validate(&method, &request.path, request.body.as_deref(), managed)?;
     let (api_base, api_key) = active_syncthing_target(&app, &sidecar, request.api_key.as_deref())?;
-    execute_syncthing_request_at(
+    let response = execute_syncthing_request_at(
         &api_base,
         &method,
         &request.path,
         request.body.as_deref(),
         api_key.as_deref(),
-    )
+    )?;
+    Ok(ProxyResponse {
+        status: response.status,
+        body: if (200..300).contains(&response.status) {
+            sync_proxy::sanitize(&request.path, &response.body, managed)?
+        } else {
+            "同步引擎请求失败。".into()
+        },
+    })
 }
 
 fn execute_syncthing_request_at(
@@ -1806,10 +1814,20 @@ fn save_note_in_dir(
 
 fn copy_then_remove(source: &Path, destination: &Path) -> Result<(), String> {
     ensure_regular_note_file(source)?;
-    if destination.exists() {
-        ensure_regular_note_file(destination)?;
+    let mut input = fs::File::open(source).map_err(|err| format!("无法读取原笔记：{err}"))?;
+    // Never overwrite a file created after the unique-name check (including by sync).
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(destination)
+        .map_err(|err| format!("无法创建目标笔记：{err}"))?;
+    if let Err(error) = std::io::copy(&mut input, &mut output).and_then(|_| output.sync_all()) {
+        drop(output);
+        let _ = fs::remove_file(destination);
+        return Err(format!("无法移动笔记：{error}"));
     }
-    fs::copy(source, destination).map_err(|err| format!("无法移动笔记：{err}"))?;
+    drop(output);
+    drop(input);
     fs::remove_file(source).map_err(|err| format!("无法清理原笔记：{err}"))
 }
 
@@ -1820,7 +1838,7 @@ fn move_note_to_trash(notes_dir: &Path, id: &str) -> Result<(), String> {
     if !source.exists() {
         return Ok(());
     }
-    let destination = note_path(&trash_dir, id)?;
+    let destination = note_path(&trash_dir, &unique_note_id(&trash_dir, id)?)?;
     copy_then_remove(&source, &destination)
 }
 
@@ -1831,7 +1849,7 @@ fn restore_note_from_trash(notes_dir: &Path, id: &str) -> Result<(), String> {
     if !source.exists() {
         return Ok(());
     }
-    let destination = note_path(&destination_dir, id)?;
+    let destination = note_path(&destination_dir, &unique_note_id(&destination_dir, id)?)?;
     copy_then_remove(&source, &destination)
 }
 
@@ -3053,6 +3071,57 @@ mod tests {
         assert_eq!(duplicate.id, "第一条笔记-2");
         assert_eq!(list_notes_in_dir(&notes_dir, false).unwrap().len(), 2);
         fs::remove_dir_all(notes_dir).unwrap();
+    }
+
+    #[test]
+    fn trash_and_restore_preserve_same_named_notes() {
+        let dir = temporary_notes_dir("trash-collisions");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("note.md"), "old content").unwrap();
+        move_note_to_trash(&dir, "note").unwrap();
+        fs::write(dir.join("note.md"), "new content").unwrap();
+        fs::write(dir.join("note-2.md"), "another content").unwrap();
+        restore_note_from_trash(&dir, "note").unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.join("note.md")).unwrap(),
+            "new content"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join("note-2.md")).unwrap(),
+            "another content"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join("note-3.md")).unwrap(),
+            "old content"
+        );
+
+        move_note_to_trash(&dir, "note").unwrap();
+        fs::write(dir.join("note.md"), "latest content").unwrap();
+        move_note_to_trash(&dir, "note").unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.join(".trash/note.md")).unwrap(),
+            "new content"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join(".trash/note-2.md")).unwrap(),
+            "latest content"
+        );
+        assert!(!dir.join("note.md").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn move_rejects_existing_destination_without_changing_either_file() {
+        let dir = temporary_notes_dir("move-existing");
+        fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("source.md");
+        let destination = dir.join("destination.md");
+        fs::write(&source, "source").unwrap();
+        fs::write(&destination, "destination").unwrap();
+        assert!(copy_then_remove(&source, &destination).is_err());
+        assert_eq!(fs::read_to_string(&source).unwrap(), "source");
+        assert_eq!(fs::read_to_string(&destination).unwrap(), "destination");
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

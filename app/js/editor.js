@@ -70,13 +70,26 @@ function canWriteCurrentStorage() {
            (AppState.storageMode === 'fsa' && AppState.folderHandle);
 }
 
-async function saveCurrentNote(options = {}) {
+let webSaveQueue = Promise.resolve();
+function saveCurrentNote(options = {}) {
+    if (AppState.storageMode === 'desktop' && window.DesktopEditing) return DesktopEditing.save();
+    const task = webSaveQueue.catch(() => {}).then(() => saveWebSnapshot(options));
+    webSaveQueue = task;
+    return task;
+}
+
+async function saveWebSnapshot(options = {}) {
     if (AppState.storageMode === 'desktop' && window.DesktopEditing) {
         return DesktopEditing.save();
     }
-    if (AppState._showTrash) return;
+    if (AppState._showTrash || AppState._currentNoteReadOnly) return;
+    if (AppState._composing) throw new Error('请完成中文输入后再保存或切换。');
+    const session = AppState._editSession;
+    const id = AppState.currentNoteId;
+    const folder = AppState.folderHandle;
     const content = getEditorContent();
-    if (!content.trim() && !AppState.currentNoteId) return;
+    if (!content.trim() && !id) { AppState.isDirty = false; return; }
+    if (!AppState.isDirty) return;
     if (!canWriteCurrentStorage()) {
         updateStatusBarText('save', '请先打开笔记文件夹');
         return null;
@@ -90,15 +103,17 @@ async function saveCurrentNote(options = {}) {
         return null;
     }
 
+    if (session !== AppState._editSession || folder !== AppState.folderHandle) return;
     updateStatusBarText('save', '保存中...');
 
     try {
-        const result = await saveNote(AppState.currentNoteId, content);
+        const result = await saveNote(id, content);
+        if (session !== AppState._editSession || folder !== AppState.folderHandle) return result;
         AppState.currentNoteId = result.id;
-        AppState.isDirty = false;
+        AppState.isDirty = getEditorContent() !== content;
         AppState._lastSavedTime = result.updatedAt;
 
-        updateStatusBarText('save', '已保存 ' + formatDate(result.updatedAt));
+        updateStatusBarText('save', AppState.isDirty ? '未保存...' : '已保存 ' + formatDate(result.updatedAt));
         updateStatusBarText('stats', '字数：' + countWords(content));
         updateStatusBarText('time', formatDate(result.updatedAt));
         updateEditorToolbar({ title: result.title });

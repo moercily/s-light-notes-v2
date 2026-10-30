@@ -75,6 +75,11 @@ folder with a SHA-256 manifest; it excludes trash, application settings, and syn
 credentials. Font, size and line spacing are available in General settings and
 mobile settings, and apply to sticky windows too.
 
+Switching to trash waits for pending edits to save; failures keep the editor
+content intact. Trash and restore preserve same-named files as numbered copies.
+During application quit, editors and editing actions stay frozen until all
+windows finish saving or the quit is cancelled.
+
 For routine changes, run `npm run test:container` in the isolated headless
 Docker/QEMU environment; see [setup and focused checks](docs/HEADLESS_TESTING.md).
 Ask before using Parallels or a physical Mac for acceptance testing.

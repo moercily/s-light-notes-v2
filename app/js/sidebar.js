@@ -189,6 +189,7 @@ async function onNewNote() {
     AppState.isDirty = false;
     AppState._currentNoteReadOnly = false;
     AppState._showConflictsOnly = false;
+    updateTrashModeUI();
 
     // 聚焦编辑器
     const editor = $('#note-editor');
@@ -447,7 +448,7 @@ function updateTrashModeUI() {
         updateStatusBarText('save', AppState._showTrash ? '回收站 — 只读' : '冲突副本 — 只读');
     } else {
         // 正常模式
-        if (editor) editor.contentEditable = 'true';
+        if (editor) editor.contentEditable = window.DesktopEditing?.isClosing() ? 'false' : 'true';
         if (btnNew) btnNew.style.display = '';
         if (btnDelete) btnDelete.style.display = '';
     }

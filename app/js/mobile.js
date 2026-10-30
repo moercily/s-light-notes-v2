@@ -428,7 +428,7 @@ async function onMobileVisibilityChange() {
     if (AppState.storageMode !== 'android') return;
 
     try {
-        if (AppState.currentNoteId && !AppState.isDirty) {
+        if (AppState._view === 'editor' && AppState.currentNoteId && !AppState.isDirty && !AppState._composing) {
             await openMobileNote(AppState.currentNoteId);
         } else if (!AppState.isDirty) {
             await refreshMobileNotes();
@@ -441,14 +441,17 @@ async function onMobileVisibilityChange() {
 function initMobileNavigation() {
     history.replaceState({ mobileView: 'list' }, '', location.href);
     window.addEventListener('popstate', async (event) => {
+        const navigation = ++mobileNavigation;
         const name = event.state && event.state.mobileView ? event.state.mobileView : 'list';
         if (AppState._view === 'editor' && AppState.isDirty) {
             await saveMobileCurrentNote();
+            if (navigation !== mobileNavigation) return;
             if (AppState.isDirty) {
                 history.pushState({ mobileView: 'editor' }, '', location.href);
                 return;
             }
         }
+        if (navigation !== mobileNavigation) return;
         activateMobileView(name);
         if (name === 'list') await refreshMobileNotes();
     });
@@ -462,6 +465,7 @@ function activateMobileView(name) {
 
 function showMobileView(name) {
     if (AppState._view === name) return;
+    ++mobileNavigation;
     activateMobileView(name);
     history.pushState({ mobileView: name }, '', location.href);
 }
