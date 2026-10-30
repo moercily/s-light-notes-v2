@@ -143,6 +143,14 @@
     }
 
     async function init() {
+        // Also block shortcuts and toolbar actions while waiting for other windows.
+        for (const type of ['keydown', 'beforeinput', 'paste', 'drop', 'click']) {
+            window.addEventListener(type, event => {
+                if (!closing) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }, true);
+        }
         // Register before reading data: close requests must never bypass saving.
         const current = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
         await current.listen('desktop-flush', flush);
@@ -156,5 +164,5 @@
         setInterval(() => { if (!document.hidden) refresh(); }, 2000);
     }
 
-    window.DesktopEditing = { save, init, ready: () => { initialized = true; }, refresh, flush, saveCopy, reload, report, invoke };
+    window.DesktopEditing = { save, init, ready: () => { initialized = true; }, isClosing: () => closing, refresh, flush, saveCopy, reload, report, invoke };
 })();

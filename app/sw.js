@@ -4,7 +4,7 @@
    ============================================ */
 
 const CACHE_PREFIX = 's-light-notes-v2-';
-const CACHE_NAME = CACHE_PREFIX + '0.1.0-reliability-1';
+const CACHE_NAME = CACHE_PREFIX + '0.1.1-review-fixes-2';
 
 // 需要缓存的静态资源
 const STATIC_ASSETS = [

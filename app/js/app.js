@@ -442,7 +442,24 @@ function registerSW() {
 
 // ========== 回收站 ==========
 
+let trashTogglePending = false;
 async function toggleTrash() {
+    if (trashTogglePending || window.DesktopEditing?.isClosing()) return;
+    trashTogglePending = true;
+    const navigation = ++noteNavigation;
+    try {
+        if (AppState.isDirty && !AppState._showTrash) await saveCurrentNote();
+        if (AppState.isDirty || navigation !== noteNavigation || window.DesktopEditing?.isClosing()) return;
+        await switchTrashView();
+    } catch (error) {
+        if (window.DesktopEditing) DesktopEditing.report(error);
+        else updateStatusBarText('save', '保存失败，内容仍保留');
+    } finally {
+        trashTogglePending = false;
+    }
+}
+
+async function switchTrashView() {
     AppState._showTrash = !AppState._showTrash;
     const btn = $('#btn-show-trash');
     if (AppState._showTrash) {

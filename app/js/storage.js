@@ -31,6 +31,17 @@ async function initStorage() {
 //  FSA 适配器 — 直接读写本地 .md 文件
 // ====================================================
 
+let fsaWriteQueue = Promise.resolve();
+function queueFsaWrite(operation) {
+    const task = fsaWriteQueue.catch(() => {}).then(() => {
+        const locks = window.navigator?.locks;
+        // Keep the existing lock name so saves also coordinate with earlier move operations.
+        return locks ? locks.request('s-light-notes-fsa-move', operation) : operation();
+    });
+    fsaWriteQueue = task;
+    return task;
+}
+
 /**
  * 打开文件夹选择器，获取目录句柄
  * @returns {Promise<FileSystemDirectoryHandle|null>}
@@ -130,24 +141,31 @@ async function fsaSaveNote(id, content) {
     const handle = AppState.folderHandle;
     if (!handle) throw new Error('未选择笔记文件夹');
 
-    // 新建笔记时生成 ID
-    if (!id) {
-        const baseId = generateNoteId(extractTitle(content));
-        id = await fsaFindUniqueId(baseId);
-    }
+    return queueFsaWrite(async () => {
+        // Allocate the name and finish writing under the same lock as trash/restore.
+        if (!id) {
+            const baseId = generateNoteId(extractTitle(content));
+            id = await fsaFindUniqueId(baseId, handle);
+        }
 
-    const fileName = id + '.md';
-    const fileHandle = await handle.getFileHandle(fileName, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(content);
-    await writable.close();
+        const fileName = id + '.md';
+        const fileHandle = await handle.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        try {
+            await writable.write(content);
+            await writable.close();
+        } catch (error) {
+            try { await writable.abort(); } catch (_) { /* Keep the original error. */ }
+            throw error;
+        }
 
-    const file = await fileHandle.getFile();
-    return {
-        id: id,
-        title: extractTitle(content),
-        updatedAt: file.lastModified,
-    };
+        const file = await fileHandle.getFile();
+        return {
+            id: id,
+            title: extractTitle(content),
+            updatedAt: file.lastModified,
+        };
+    });
 }
 
 /**
@@ -159,12 +177,14 @@ async function fsaDeleteNote(id) {
     const handle = AppState.folderHandle;
     if (!handle) throw new Error('未选择笔记文件夹');
 
-    try {
-        await handle.removeEntry(id + '.md');
-    } catch (err) {
-        if (err.name === 'NotFoundError') return;
-        throw err;
-    }
+    return queueFsaWrite(async () => {
+        try {
+            await handle.removeEntry(id + '.md');
+        } catch (err) {
+            if (err.name === 'NotFoundError') return;
+            throw err;
+        }
+    });
 }
 
 /**
@@ -172,8 +192,7 @@ async function fsaDeleteNote(id) {
  * @param {string} baseId
  * @returns {Promise<string>}
  */
-async function fsaFindUniqueId(baseId) {
-    const handle = AppState.folderHandle;
+async function fsaFindUniqueId(baseId, handle = AppState.folderHandle) {
     if (!handle) return baseId;
 
     let id = baseId;
@@ -276,50 +295,29 @@ async function idbReadNote(id) {
 /**
  * IDB: 保存笔记
  */
-async function idbSaveNote(id, content) {
+function idbSaveNote(id, content, suggestedId) {
     const db = getIDB();
-
-    if (!id) {
-        id = generateNoteId(extractTitle(content));
-        // 检查是否已存在同名 ID
-        let exists = true;
-        let baseId = id;
-        let counter = 2;
-        while (exists) {
-            const existing = await idbReadNote(id);
-            if (!existing) { exists = false; break; }
-            id = baseId + '-' + counter;
-            counter++;
-        }
-    }
-
-    const record = {
-        id: id,
-        title: extractTitle(content),
-        content: content,
-        updatedAt: Date.now(),
-        createdAt: Date.now(), // IDB 中保留创建时间
-    };
-
+    const base = suggestedId || generateNoteId(extractTitle(content));
     return new Promise((resolve, reject) => {
         const tx = db.transaction('notes', 'readwrite');
         const store = tx.objectStore('notes');
-
-        // 如果记录已存在，保留 createdAt
-        const getRequest = store.get(id);
-        getRequest.onsuccess = () => {
-            if (getRequest.result && getRequest.result.createdAt) {
-                record.createdAt = getRequest.result.createdAt;
-            }
-            const putRequest = store.put(record);
-            putRequest.onsuccess = () => resolve({
-                id: record.id,
-                title: record.title,
-                updatedAt: record.updatedAt,
-            });
-            putRequest.onerror = () => reject(putRequest.error);
-        };
-        getRequest.onerror = () => reject(getRequest.error);
+        let result;
+        tx.oncomplete = () => resolve(result);
+        tx.onabort = tx.onerror = () => reject(tx.error || new Error('笔记写入失败'));
+        function write(candidate, counter = 2) {
+            const request = store.get(candidate);
+            request.onsuccess = () => {
+                // Allocate and create within the same transaction, including archived IDs.
+                if (!id && request.result) { write(base + '-' + counter, counter + 1); return; }
+                const now = Date.now();
+                const record = { id: candidate, title: extractTitle(content), content,
+                    updatedAt: now, createdAt: id && request.result?.createdAt || now };
+                if (id) store.put(record);
+                else store.add(record);
+                result = { id: candidate, title: record.title, updatedAt: now };
+            };
+        }
+        write(id || base);
     });
 }
 
@@ -587,7 +585,7 @@ function importNotes() {
                     if (AppState.storageMode === 'android') {
                         await window.mobileStorageService.save(null, generateNoteId(id), content);
                     } else {
-                        await idbSaveNote(id, content);
+                        await idbSaveNote(null, content, generateNoteId(id));
                     }
                     count++;
                 } catch (err) {
@@ -606,71 +604,54 @@ function importNotes() {
 //  FSA 回收站 — 使用 .trash 子文件夹
 // ====================================================
 
-/**
- * FSA: 将笔记移入回收站（.trash 子文件夹）
- */
-async function fsaMoveToTrash(id) {
-    const handle = AppState.folderHandle;
-    if (!handle) throw new Error('未选择笔记文件夹');
-
+async function fsaMovePreservingCopies(source, destination, id) {
     const fileName = id + '.md';
-    try {
-        const fileHandle = await handle.getFileHandle(fileName);
-        const file = await fileHandle.getFile();
-        const content = await file.text();
-
-        // 确保 .trash 文件夹存在
-        let trashHandle;
-        try {
-            trashHandle = await handle.getDirectoryHandle('.trash');
-        } catch (err) {
-            if (err.name === 'NotFoundError') {
-                trashHandle = await handle.getDirectoryHandle('.trash', { create: true });
-            } else {
-                throw err;
-            }
+    let fileHandle;
+    try { fileHandle = await source.getFileHandle(fileName); }
+    catch (error) { if (error.name === 'NotFoundError') return; throw error; }
+    const content = await (await fileHandle.getFile()).text();
+    let candidate = fileName, counter = 2;
+    while (true) {
+        try { await destination.getFileHandle(candidate); }
+        catch (error) {
+            if (error.name === 'NotFoundError') break;
+            throw error;
         }
-
-        // 写入回收站
-        const trashFileHandle = await trashHandle.getFileHandle(fileName, { create: true });
-        const writable = await trashFileHandle.createWritable();
+        candidate = id + '-' + counter++ + '.md';
+    }
+    const target = await destination.getFileHandle(candidate, { create: true });
+    const writable = await target.createWritable();
+    try {
         await writable.write(content);
         await writable.close();
-
-        // 删除原文件
-        await handle.removeEntry(fileName);
-    } catch (err) {
-        if (err.name === 'NotFoundError') return;
-        throw err;
+    } catch (error) {
+        try { await writable.abort(); } catch (_) { /* Keep the original error. */ }
+        // Preserve the source and do not delete a destination another actor may have changed.
+        throw error;
     }
+    await source.removeEntry(fileName);
 }
 
-/**
- * FSA: 从回收站恢复笔记
- */
-async function fsaRestoreFromTrash(id) {
+/** FSA: 将笔记移入回收站（.trash 子文件夹）。 */
+function fsaMoveToTrash(id) {
     const handle = AppState.folderHandle;
-    if (!handle) throw new Error('未选择笔记文件夹');
+    if (!handle) return Promise.reject(new Error('未选择笔记文件夹'));
+    return queueFsaWrite(async () => {
+        const trash = await handle.getDirectoryHandle('.trash', { create: true });
+        return fsaMovePreservingCopies(handle, trash, id);
+    });
+}
 
-    try {
-        const trashHandle = await handle.getDirectoryHandle('.trash');
-        const fileName = id + '.md';
-        const fileHandle = await trashHandle.getFileHandle(fileName);
-        const file = await fileHandle.getFile();
-        const content = await file.text();
-
-        // 写回主文件夹
-        const mainFileHandle = await handle.getFileHandle(fileName, { create: true });
-        const writable = await mainFileHandle.createWritable();
-        await writable.write(content);
-        await writable.close();
-
-        // 从回收站删除
-        await trashHandle.removeEntry(fileName);
-    } catch (err) {
-        if (err.name === 'NotFoundError') return;
-        throw err;
-    }
+/** FSA restore creates a copy when the active filename already exists. */
+function fsaRestoreFromTrash(id) {
+    const handle = AppState.folderHandle;
+    if (!handle) return Promise.reject(new Error('未选择笔记文件夹'));
+    return queueFsaWrite(async () => {
+        let trash;
+        try { trash = await handle.getDirectoryHandle('.trash'); }
+        catch (error) { if (error.name === 'NotFoundError') return; throw error; }
+        return fsaMovePreservingCopies(trash, handle, id);
+    });
 }
 
 /**
@@ -706,13 +687,15 @@ async function fsaPermanentlyDelete(id) {
     const handle = AppState.folderHandle;
     if (!handle) throw new Error('未选择笔记文件夹');
 
-    try {
-        const trashHandle = await handle.getDirectoryHandle('.trash');
-        await trashHandle.removeEntry(id + '.md');
-    } catch (err) {
-        if (err.name === 'NotFoundError') return;
-        throw err;
-    }
+    return queueFsaWrite(async () => {
+        try {
+            const trashHandle = await handle.getDirectoryHandle('.trash');
+            await trashHandle.removeEntry(id + '.md');
+        } catch (err) {
+            if (err.name === 'NotFoundError') return;
+            throw err;
+        }
+    });
 }
 
 /**

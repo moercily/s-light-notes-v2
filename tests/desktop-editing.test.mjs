@@ -128,3 +128,93 @@ console.log('desktop multi-window editing tests passed');
     assert.equal(f.state.isDirty, true); assert.equal(f.editor.contentEditable, 'true');
     assert.equal(f.calls.at(-1).success, false);
 }
+
+// Exercise the real main-window refresh path rather than a no-op list stub.
+{
+    const { JSDOM } = await import('jsdom');
+    const tick = () => new Promise(resolve => setImmediate(resolve));
+    function mainFixture() {
+        const dom = new JSDOM(readFileSync('app/index.html', 'utf8'), { url: 'https://notes.test', runScripts: 'outside-only' });
+        const w = dom.window;
+        w.setInterval = () => 0;
+        const scripts = ['utils', 'editor', 'sidebar', 'app', 'desktop-editing'].map(name => {
+            const source = readFileSync('app/js/' + name + '.js', 'utf8');
+            return name === 'app' ? source.replace(/document.addEventListener\('DOMContentLoaded',[\s\S]*$/, '') : source;
+        });
+        w.eval(scripts.join('\n') + '\nwindow.AppState = AppState;');
+        const acks = [], listeners = {};
+        w.__TAURI__ = {
+            core: { invoke: async (name, args) => acks.push({ name, ...args }) },
+            event: { listen: async (name, cb) => { listeners[name] = cb; } },
+            webviewWindow: { getCurrentWebviewWindow: () => ({ label: 'main', listen: async () => {} }) },
+        };
+        w.listNotes = async () => [];
+        Object.assign(w.AppState, { storageMode: 'desktop', currentNoteId: 'a', isDirty: true, _editSession: 1, _version: 'v1' });
+        const editor = w.document.querySelector('#note-editor');
+        w.setEditorMarkdown(editor, 'unsaved');
+        return { dom, w, editor, acks, listeners };
+    }
+    for (const outcome of ['success', 'failure', 'dirty']) {
+        const { dom, w } = mainFixture();
+        let release;
+        w.desktopService = { saveNote: async () => {
+            await new Promise(resolve => { release = resolve; });
+            if (outcome === 'failure') throw new Error('disk full');
+            return { id: 'a', version: 'v2', updatedAt: 1 };
+        } };
+        const toggle = w.toggleTrash();
+        await tick();
+        assert.equal(w.AppState._showTrash, false);
+        assert.equal(w.getEditorContent(), 'unsaved');
+        // A repeated click while saving must not undo the eventual switch.
+        await w.toggleTrash();
+        if (outcome === 'dirty') w.setEditorMarkdown(w.document.querySelector('#note-editor'), 'new typing');
+        release(); await toggle;
+        assert.equal(w.AppState._showTrash, outcome === 'success');
+        assert.equal(w.getEditorContent(), outcome === 'success' ? '' : outcome === 'dirty' ? 'new typing' : 'unsaved');
+        assert.equal(w.AppState.isDirty, outcome !== 'success');
+        dom.window.close();
+    }
+    {
+        const { dom, w } = mainFixture();
+        let release;
+        w.readNote = () => new Promise(resolve => { release = resolve; });
+        w.AppState.isDirty = false;
+        const selection = w.onNoteSelected('b');
+        await tick();
+        await w.toggleTrash();
+        release({ id: 'b', content: 'stale read', version: 'b1' });
+        await selection;
+        assert.equal(w.AppState.currentNoteId, null);
+        assert.equal(w.getEditorContent(), '');
+        dom.window.close();
+    }
+    {
+        const { dom, w, editor, acks, listeners } = mainFixture();
+        w.desktopService = { saveNote: async () => ({ id: 'a', version: 'v2', updatedAt: 1 }) };
+        await w.DesktopEditing.init(); w.DesktopEditing.ready();
+        await w.DesktopEditing.flush({ payload: { token: 42 } });
+        assert.equal(acks.at(-1).success, true);
+        assert.equal(editor.contentEditable, 'false');
+        await w.refreshNoteList();
+        assert.equal(editor.contentEditable, 'false');
+        let actions = 0;
+        const button = w.document.querySelector('#btn-new-note');
+        button.addEventListener('click', () => actions++);
+        button.click();
+        const key = new w.KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true });
+        editor.dispatchEvent(key);
+        assert.equal(actions, 0);
+        assert.equal(key.defaultPrevented, true);
+        listeners['desktop-close-cancelled']();
+        assert.equal(editor.contentEditable, 'true');
+        button.click();
+        assert.equal(actions, 1);
+        // Cancellation must still respect conflict/trash read-only state.
+        w.AppState._showTrash = true;
+        listeners['desktop-close-cancelled']();
+        assert.equal(editor.contentEditable, 'false');
+        dom.window.close();
+    }
+    console.log('main trash save barrier and quit freeze integration tests passed');
+}

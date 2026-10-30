@@ -6,7 +6,7 @@
   "scripts": {
     "test:quick": "node scripts/test-quick.mjs",
     "test:container": "node scripts/test-container.mjs",
-    "test": "node tests/structure.test.mjs && node tests/desktop-service.test.mjs && node tests/mobile-storage-service.test.mjs && node tests/android-sync-service.test.mjs && node tests/desktop-storage.test.mjs && node tests/sync-service.test.mjs && node tests/sync-center.test.mjs && node tests/desktop-editing.test.mjs && node tests/settings.test.mjs && node tests/editor.test.mjs && node tests/reliability.test.mjs && node tests/native-shell.test.mjs && node tests/android-permissions.test.mjs",
+    "test": "node tests/structure.test.mjs && node tests/desktop-service.test.mjs && node tests/mobile-storage-service.test.mjs && node tests/android-sync-service.test.mjs && node tests/desktop-storage.test.mjs && node tests/sync-service.test.mjs && node tests/sync-center.test.mjs && node tests/desktop-editing.test.mjs && node tests/review-regressions.test.mjs && node tests/settings.test.mjs && node tests/editor.test.mjs && node tests/reliability.test.mjs && node tests/native-shell.test.mjs && node tests/android-permissions.test.mjs",
     "version": "node scripts/sync-version.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
+    "fake-indexeddb": "6.2.6",
     "jsdom": "26.1.0"
   }
 }
